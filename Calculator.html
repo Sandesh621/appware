@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Simple Calculator</title>
+    <title>Simple & Table Calculator</title>
     
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
         
         body {
             font-family: 'Inter', sans-serif;
@@ -22,8 +26,12 @@
             padding: 2rem 1rem;
             touch-action: manipulation;
             user-select: none;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* ==========================================
+           SHARED THEME CARD CONTAINER (Calculator.html)
+           ========================================== */
         .calculator-container {
             background-color: #ffffff;
             border-radius: 2.5rem;
@@ -35,8 +43,25 @@
             display: flex;
             flex-direction: column;
             gap: 1.25rem;
+            transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        .table-calculator-container {
+            background-color: #ffffff;
+            border-radius: 2.5rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 560px;
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.15rem;
+        }
+
+        /* ==========================================
+           SIMPLE CALCULATOR STYLES
+           ========================================== */
         .display-area {
             min-height: 110px;
             display: flex;
@@ -76,6 +101,10 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.02);
         }
 
+        .btn:hover {
+            background-color: #f1f5f9;
+        }
+
         .btn:active {
             transform: scale(0.92);
             background-color: #e2e8f0;
@@ -88,16 +117,28 @@
             font-weight: 500;
         }
 
+        .btn.operator:hover {
+            background-color: #ecfdf5;
+        }
+
         .btn.action {
             background-color: #f1f5f9;
             color: #e11d48;
             font-weight: 500;
         }
 
+        .btn.action:hover {
+            background-color: #fff1f2;
+        }
+
         .btn.special {
             background-color: #f1f5f9;
             color: #2563eb;
             font-weight: 500;
+        }
+
+        .btn.special:hover {
+            background-color: #eff6ff;
         }
 
         .btn.equals {
@@ -110,8 +151,41 @@
             box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
         }
 
-        .btn.equals:active {
+        .btn.equals:hover {
             background-color: #059669;
+        }
+
+        .btn.equals:active {
+            background-color: #047857;
+        }
+
+        /* Link button inside Calculator to switch to Table Calculator */
+        .btn-table-link {
+            background-color: #f1f5f9;
+            color: #059669;
+            border: 1px solid #e2e8f0;
+            border-radius: 1.1rem;
+            padding: 0.7rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-table-link:hover {
+            background-color: #ecfdf5;
+            border-color: #a7f3d0;
+            color: #047857;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.12);
+        }
+
+        .btn-table-link:active {
+            transform: scale(0.98);
         }
 
         #history-panel {
@@ -122,11 +196,11 @@
             display: none;
         }
 
-        /* Fixed cursor to use a consistent 1px border instead of an inline block width */
+        /* Consistent 1px blinking cursor */
         .cursor-blink {
             display: inline-block;
             width: 0px; 
-            border-left: 1px solid currentColor;
+            border-left: 1.5px solid #10b981;
             height: 1.1em;
             animation: blink 1s step-end infinite;
             vertical-align: text-bottom;
@@ -145,13 +219,222 @@
             cursor: text;
             display: inline-block;
         }
+
+        /* ==========================================
+           TABLE CALCULATOR THEME STYLES
+           (Matched to Calculator.html Slate & Emerald)
+           ========================================== */
+        .table-wrapper-box {
+            border: 1px solid #e2e8f0;
+            border-radius: 1.5rem;
+            overflow: hidden;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+        }
+
+        table.themed-excel-table {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+            background-color: #ffffff;
+        }
+
+        .col-sn { width: 18%; }
+        .col-unit { width: 44%; }
+        .col-multiple { width: 38%; }
+
+        .themed-th {
+            background-color: #f8fafc;
+            color: #334155;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 12px 8px;
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+            border-right: 1px solid #e2e8f0;
+            user-select: none;
+        }
+
+        .themed-th:last-child {
+            border-right: none;
+        }
+
+        .themed-td {
+            border-bottom: 1px solid #f1f5f9;
+            border-right: 1px solid #f1f5f9;
+            height: 46px;
+            padding: 0;
+            text-align: center;
+            vertical-align: middle;
+            background-color: #ffffff;
+            transition: background-color 0.12s ease;
+        }
+
+        .themed-td:last-child {
+            border-right: none;
+        }
+
+        tbody tr:last-child .themed-td {
+            border-bottom: none;
+        }
+
+        /* S.N. column cell */
+        .sn-cell {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #64748b;
+            background-color: #f8fafc;
+            user-select: none;
+        }
+
+        .sn-cell.sn-active {
+            background-color: #ecfdf5 !important;
+            color: #059669 !important;
+            font-weight: 700;
+        }
+
+        /* Active cell selection outline + fill handle dot in Emerald */
+        .input-cell-td {
+            position: relative;
+        }
+
+        .input-cell-td.active-excel-cell {
+            outline: 2px solid #10b981;
+            outline-offset: -2px;
+            z-index: 15;
+            background-color: #ffffff !important;
+        }
+
+        .input-cell-td.active-excel-cell::after {
+            content: '';
+            position: absolute;
+            right: -3.5px;
+            bottom: -3.5px;
+            width: 7px;
+            height: 7px;
+            background-color: #10b981;
+            border: 1.5px solid #ffffff;
+            border-radius: 2px;
+            z-index: 25;
+            pointer-events: none;
+        }
+
+        /* Seamless centered cell input */
+        .excel-input {
+            width: 100%;
+            height: 44px;
+            background: transparent;
+            border: none;
+            outline: none;
+            text-align: center;
+            font-size: 1.05rem;
+            font-weight: 500;
+            color: #1e293b;
+            padding: 0 34px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .excel-input.subtract-mode {
+            color: #e11d48;
+            font-weight: 600;
+        }
+
+        /* Multiple column styling */
+        .multiple-cell {
+            font-weight: 600;
+            font-size: 1.05rem;
+            color: #1e293b;
+            font-family: 'JetBrains Mono', 'Inter', monospace;
+            user-select: text;
+        }
+
+        .multiple-cell.subtract-mode {
+            color: #e11d48;
+            background-color: #fff1f2;
+        }
+
+        /* Action pill buttons inside Table Calculator matching Calculator.html tokens */
+        .table-action-btn {
+            border-radius: 0.9rem;
+            padding: 0.5rem 0.85rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            transition: all 0.12s ease;
+            cursor: pointer;
+            border: 1px solid #f1f5f9;
+        }
+
+        .table-action-btn:active {
+            transform: scale(0.94);
+        }
+
+        .table-btn-emerald {
+            background-color: #10b981;
+            color: #ffffff;
+            border-color: #10b981;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+        }
+        .table-btn-emerald:hover {
+            background-color: #059669;
+        }
+
+        .table-btn-slate {
+            background-color: #f1f5f9;
+            color: #334155;
+        }
+        .table-btn-slate:hover {
+            background-color: #e2e8f0;
+        }
+
+        .table-btn-rose {
+            background-color: #f1f5f9;
+            color: #e11d48;
+        }
+        .table-btn-rose:hover {
+            background-color: #ffe4e6;
+        }
+
+        .table-btn-blue {
+            background-color: #f1f5f9;
+            color: #2563eb;
+        }
+        .table-btn-blue:hover {
+            background-color: #dbeafe;
+        }
+
+        /* Pop animation when Total updates */
+        @keyframes totalPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.04); }
+            100% { transform: scale(1); }
+        }
+        .total-pop {
+            animation: totalPulse 0.18s ease-out;
+        }
+
+        /* Hide number input spinners */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
     </style>
 </head>
 <body>
 
-    <div class="text-center space-y-2 mb-8">
-        <div class="inline-flex items-center justify-center p-3 bg-emerald-100 rounded-full mb-2 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-600">
+    <!-- =================================================================
+         SHARED HEADER SECTION (Matches Calculator.html theme)
+         ================================================================= -->
+    <div class="text-center space-y-2 mb-6">
+        <div class="inline-flex items-center justify-center p-3 bg-emerald-100 rounded-full mb-1 shadow-sm">
+            <!-- Dynamic SVG Icon based on active calculator -->
+            <svg id="header-icon-simple" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-600">
                 <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
                 <line x1="8" y1="6" x2="16" y2="6"></line>
                 <line x1="16" y1="14" x2="16" y2="18"></line>
@@ -163,31 +446,43 @@
                 <line x1="12" y1="14" x2="12" y2="14"></line>
                 <line x1="12" y1="18" x2="12" y2="18"></line>
             </svg>
+            <svg id="header-icon-table" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-600 hidden">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="3" y1="9" x2="21" y2="9"></line>
+                <line x1="3" y1="15" x2="21" y2="15"></line>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+                <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
         </div>
-        <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Simple Calculator</h1>
-        <p class="text-slate-500 text-sm sm:text-base">Calculate numbers quickly and paste values directly.</p>
+        <h1 id="app-title" class="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Simple Calculator</h1>
+        <p id="app-subtitle" class="text-slate-500 text-sm sm:text-base">Calculate numbers quickly and paste values directly.</p>
     </div>
 
-    <div class="calculator-container relative overflow-hidden">
+    <!-- =================================================================
+         VIEW 1: SIMPLE CALCULATOR (Calculator.html)
+         ================================================================= -->
+    <div id="simple-calc-view" class="calculator-container relative overflow-hidden">
         
-        <button id="history-toggle" class="absolute top-6 left-6 text-slate-400 hover:text-slate-800 transition-colors z-10" aria-label="View History">
+        <button id="history-toggle" class="absolute top-6 left-6 text-slate-400 hover:text-slate-800 transition-colors z-10" aria-label="View History" title="View History">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
         </button>
 
-        <button id="edit-last" class="absolute top-6 right-6 text-slate-400 hover:text-slate-800 transition-colors z-10" aria-label="Edit Last Calculation">
+        <button id="edit-last" class="absolute top-6 right-6 text-slate-400 hover:text-slate-800 transition-colors z-10" aria-label="Edit Last Calculation" title="Edit Last Calculation">
             <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M12 20h9"></path>
                 <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
             </svg>
         </button>
 
+        <!-- Calculator Display Area -->
         <div id="display-area" class="display-area mt-4" contenteditable="true" inputmode="none" spellcheck="false" tabindex="0">
             <div id="display" class="text-5xl font-light w-full text-right overflow-x-auto whitespace-nowrap scrollbar-hide tracking-wide transition-all duration-100 ease-in-out text-slate-900 pointer-events-none">0</div>
         </div>
 
+        <!-- Keypad Grid -->
         <div class="grid grid-cols-4 gap-3">
             <button class="btn action text-2xl" data-action="clear">AC</button>
             <button class="btn special text-2xl" data-val="(">(</button>
@@ -219,6 +514,14 @@
             </div>
         </div>
 
+        <!-- Dedicated Bottom Button linking to Table Calculator -->
+        <button id="open-table-calc-bottom" type="button" class="btn-table-link w-full mt-1">
+            <i class="fa-solid fa-table-list text-emerald-600"></i>
+            <span>Open Table Calculator</span>
+            <i class="fa-solid fa-arrow-right text-xs ml-auto opacity-75"></i>
+        </button>
+
+        <!-- Slide-up History Drawer -->
         <div id="history-panel" class="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex flex-col p-6 translate-y-full rounded-[2.5rem] border border-slate-100 shadow-xl">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="text-xl font-medium text-slate-900">History</h3>
@@ -241,7 +544,183 @@
         </div>
     </div>
 
+    <!-- =================================================================
+         VIEW 2: TABLE CALCULATOR (Themed to match Calculator.html)
+         ================================================================= -->
+    <div id="table-calc-view" class="table-calculator-container hidden">
+
+        <!-- Card Top Navigation Bar: Back to Simple Calculator + Copy Total to Calculator -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <button id="back-to-simple-calc" type="button" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 text-xs sm:text-sm font-semibold transition-all active:scale-95">
+                <i class="fa-solid fa-arrow-left text-emerald-600"></i>
+                <span>Simple Calculator</span>
+            </button>
+
+            <button id="use-total-in-calc" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs sm:text-sm font-semibold border border-emerald-200/70 transition-all active:scale-95" title="Send Net Total to Simple Calculator display">
+                <i class="fa-solid fa-calculator text-emerald-600"></i>
+                <span>Send Total to Calculator</span>
+            </button>
+        </div>
+
+        <!-- Sticky Display & Controls Header (Styled in Calculator.html Slate & Emerald Palette) -->
+        <div class="sticky top-2 z-30 bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 p-4 shadow-sm flex flex-col gap-3">
+            
+            <!-- Total Readout Area (Matches Simple Calculator display aesthetic) -->
+            <div class="bg-slate-50 border border-slate-100 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex flex-col">
+                    <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Net Table Total</span>
+                    <div class="flex items-center gap-2 mt-1">
+                        <!-- Added (+) Summary Pill -->
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-100/80 text-emerald-700 text-xs font-semibold font-mono" title="Sum of Added Multiples">
+                            <span>+</span>
+                            <span id="badgeAddedTotal">0</span>
+                        </span>
+                        <!-- Subtracted (−) Summary Pill -->
+                        <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-rose-100/80 text-rose-600 text-xs font-semibold font-mono" title="Sum of Subtracted Multiples">
+                            <span>−</span>
+                            <span id="badgeSubtractedTotal">0</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Right-Aligned Large Total Display -->
+                <div class="text-right ml-auto">
+                    <span id="stickyGrandTotal" class="font-light text-4xl sm:text-5xl tracking-tight text-slate-900 font-mono block">
+                        0
+                    </span>
+                </div>
+            </div>
+
+            <!-- Action Controls Row -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-1.5">
+                    <!-- + Add Row -->
+                    <button id="btnAddRow" type="button" class="table-action-btn table-btn-emerald" title="Add 1 Row at Bottom">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Add Row</span>
+                    </button>
+
+                    <!-- - Remove Row -->
+                    <button id="btnRemoveRow" type="button" class="table-action-btn table-btn-slate" title="Remove Last Row">
+                        <i class="fa-solid fa-minus text-xs"></i>
+                        <span>Remove</span>
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <!-- Clear All -->
+                    <button id="btnClearAll" type="button" class="table-action-btn table-btn-rose" title="Reset to 1 Blank Row">
+                        <i class="fa-solid fa-rotate-left text-xs"></i>
+                        <span>Clear</span>
+                    </button>
+
+                    <!-- Export CSV -->
+                    <button id="btnExportCSV" type="button" class="table-action-btn table-btn-blue" title="Download Excel CSV">
+                        <i class="fa-solid fa-file-csv text-xs"></i>
+                        <span>Export CSV</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3-Column Tabular Spreadsheet (S.N. | 100 = 1 | Multiple) -->
+        <div class="table-wrapper-box">
+            <table class="themed-excel-table">
+                <colgroup>
+                    <col class="col-sn" />
+                    <col class="col-unit" />
+                    <col class="col-multiple" />
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th class="themed-th">S.N.</th>
+                        <th class="themed-th">
+                            <div class="inline-flex items-center justify-center gap-1.5">
+                                <input
+                                    id="multiplierInput"
+                                    type="number"
+                                    step="any"
+                                    value="100"
+                                    aria-label="Multiplier value"
+                                    class="w-16 text-center font-bold text-base text-emerald-700 bg-emerald-50 hover:bg-emerald-100/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-lg px-1.5 py-0.5 border border-emerald-200 transition"
+                                    title="Click to edit multiplier (Default: 100)"
+                                />
+                                <span class="text-slate-700 font-semibold">= 1</span>
+                            </div>
+                        </th>
+                        <th class="themed-th">Multiple</th>
+                    </tr>
+                </thead>
+                <tbody id="spreadsheetBody">
+                    <!-- Dynamically populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="text-center text-xs text-slate-400 pt-1">
+            Tip: Press <span class="font-semibold text-slate-500">Enter</span> to add/move to the next row, or type <span class="font-semibold text-rose-500">-</span> to subtract.
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 pointer-events-none flex flex-col gap-2"></div>
+
     <script>
+        /* =====================================================================
+           VIEW NAVIGATION LOGIC (SIMPLE CALCULATOR <-> TABLE CALCULATOR)
+           ===================================================================== */
+        let currentView = 'simple'; // 'simple' | 'table'
+
+        const simpleCalcView = document.getElementById('simple-calc-view');
+        const tableCalcView = document.getElementById('table-calc-view');
+        const appTitle = document.getElementById('app-title');
+        const appSubtitle = document.getElementById('app-subtitle');
+        const headerIconSimple = document.getElementById('header-icon-simple');
+        const headerIconTable = document.getElementById('header-icon-table');
+
+        function switchView(targetView) {
+            currentView = targetView;
+            if (targetView === 'table') {
+                simpleCalcView.classList.add('hidden');
+                tableCalcView.classList.remove('hidden');
+                headerIconSimple.classList.add('hidden');
+                headerIconTable.classList.remove('hidden');
+                appTitle.textContent = 'Table Calculator';
+                appSubtitle.textContent = 'Tabular addition & subtraction with live multiplier calculation.';
+                
+                // Focus active row in Table Calculator
+                setTimeout(() => {
+                    setActiveRow(appState.activeRowIndex, true);
+                }, 50);
+            } else {
+                tableCalcView.classList.add('hidden');
+                simpleCalcView.classList.remove('hidden');
+                headerIconTable.classList.add('hidden');
+                headerIconSimple.classList.remove('hidden');
+                appTitle.textContent = 'Simple Calculator';
+                appSubtitle.textContent = 'Calculate numbers quickly and paste values directly.';
+                updateDisplay();
+            }
+        }
+
+        document.getElementById('open-table-calc-bottom').addEventListener('click', () => switchView('table'));
+        document.getElementById('back-to-simple-calc').addEventListener('click', () => switchView('simple'));
+
+        // Send Net Total from Table Calculator directly into Simple Calculator
+        document.getElementById('use-total-in-calc').addEventListener('click', () => {
+            const totalText = document.getElementById('stickyGrandTotal').textContent.trim();
+            if (totalText) {
+                currentInput = totalText;
+                cursorPosition = currentInput.length;
+                isEvaluated = false;
+                switchView('simple');
+                showToast(`Loaded total (${totalText}) into calculator`);
+            }
+        });
+
+        /* =====================================================================
+           PART 1: SIMPLE CALCULATOR LOGIC (100% Preserved from Calculator.html)
+           ===================================================================== */
         const displayArea = document.getElementById('display-area');
         const display = document.getElementById('display');
         const historyPanel = document.getElementById('history-panel');
@@ -452,6 +931,7 @@
         }
 
         document.addEventListener('paste', (e) => {
+            if (currentView !== 'simple') return;
             e.preventDefault(); 
             
             const pastedText = (e.clipboardData || window.clipboardData).getData('text');
@@ -491,6 +971,7 @@
         });
 
         document.addEventListener('keydown', (e) => {
+            if (currentView !== 'simple') return;
             if (e.ctrlKey || e.metaKey || e.altKey) return; 
             const key = e.key;
 
@@ -531,6 +1012,454 @@
         });
 
         updateDisplay();
+
+        /* =====================================================================
+           PART 2: TABLE CALCULATOR LOGIC (Styled with Calculator.html Theme)
+           ===================================================================== */
+        const INITIAL_ROW_COUNT = 1;
+
+        const appState = {
+            multiplier: 100,
+            activeRowIndex: 0,
+            rows: [] // Each item: { sn: number, rawInput: string, mode: 'add' | 'sub' }
+        };
+
+        function initBlankRows(count = INITIAL_ROW_COUNT) {
+            appState.rows = [];
+            for (let i = 0; i < count; i++) {
+                appState.rows.push({
+                    sn: i + 1,
+                    rawInput: "",
+                    mode: "add"
+                });
+            }
+            appState.activeRowIndex = 0;
+        }
+
+        function evaluateTableExpression(rawStr) {
+            if (!rawStr || typeof rawStr !== "string") return 0;
+            const cleaned = rawStr.trim().replace(/,/g, "");
+            if (cleaned === "" || cleaned === "+" || cleaned === "-" || cleaned === ".") return 0;
+
+            if (!/^[0-9+\-.\s]+$/.test(cleaned)) {
+                const parsed = parseFloat(cleaned);
+                return isNaN(parsed) ? 0 : parsed;
+            }
+
+            try {
+                const normalized = cleaned.replace(/\s+/g, "");
+                const tokens = normalized.match(/[+\-]?[0-9]*\.?[0-9]+/g);
+                if (!tokens) return 0;
+                let sum = 0;
+                for (const token of tokens) {
+                    const val = parseFloat(token);
+                    if (!isNaN(val)) sum += val;
+                }
+                return Number(sum.toFixed(6));
+            } catch (err) {
+                return 0;
+            }
+        }
+
+        function computeRow(row, multiplier) {
+            const trimmed = (row?.rawInput || "").trim();
+            if (trimmed === "") {
+                return { isEmpty: true, signedUnit: 0, multiple: 0 };
+            }
+
+            const numericVal = evaluateTableExpression(trimmed);
+            const absVal = Math.abs(numericVal);
+            const signedUnit = row.mode === "sub" ? -absVal : absVal;
+            const multiple = Number((signedUnit * multiplier).toFixed(4));
+
+            return {
+                isEmpty: false,
+                signedUnit,
+                multiple
+            };
+        }
+
+        function formatNumber(num) {
+            if (num === 0 || Object.is(num, -0) || isNaN(num)) return "0";
+            return Number(num.toFixed(4)).toString();
+        }
+
+        function showToast(message) {
+            const container = document.getElementById("toastContainer");
+            if (!container) return;
+
+            const toast = document.createElement("div");
+            toast.className = "bg-slate-900 text-white px-4 py-2.5 rounded-2xl shadow-lg text-xs font-medium flex items-center gap-2 border border-slate-700 transition-all duration-300";
+            toast.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add("opacity-0", "translate-y-2");
+                setTimeout(() => toast.remove(), 300);
+            }, 1800);
+        }
+
+        function getOpBadgeClass(mode, hasValue) {
+            const base = "absolute left-2 z-10 w-6 h-6 rounded-lg text-xs font-mono font-bold flex items-center justify-center transition select-none ";
+            if (mode === "sub") {
+                return base + "bg-rose-500 text-white shadow-sm hover:bg-rose-600";
+            }
+            if (hasValue) {
+                return base + "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600";
+            }
+            return base + "bg-slate-100 text-emerald-600 border border-slate-200 hover:bg-emerald-50";
+        }
+
+        function renderSpreadsheet() {
+            const tbody = document.getElementById("spreadsheetBody");
+            if (!tbody) return;
+            tbody.innerHTML = "";
+
+            appState.rows.forEach((row, index) => {
+                const tr = document.createElement("tr");
+                const isActive = index === appState.activeRowIndex;
+                const calc = computeRow(row, appState.multiplier);
+                const hasValue = row.rawInput.trim() !== "";
+
+                // 1. S.N. Column
+                const tdSN = document.createElement("td");
+                tdSN.id = `snCell-${index}`;
+                tdSN.className = `themed-td sn-cell ${isActive ? "sn-active" : ""}`;
+                tdSN.textContent = row.sn;
+                tr.appendChild(tdSN);
+
+                // 2. "100 = 1" Input Column with interactive [+] / [−] toggle
+                const tdInput = document.createElement("td");
+                tdInput.id = `inputCellContainer-${index}`;
+                tdInput.className = `themed-td input-cell-td ${
+                    isActive ? "active-excel-cell" : ""
+                } ${row.mode === "sub" && hasValue ? "bg-rose-50/40" : "bg-white"}`;
+
+                const cellWrap = document.createElement("div");
+                cellWrap.className = "relative flex items-center w-full h-full";
+
+                const opBadge = document.createElement("button");
+                opBadge.type = "button";
+                opBadge.tabIndex = -1;
+                opBadge.id = `opBadge-${index}`;
+                opBadge.title = "Click to toggle Addition (+) or Subtraction (−)";
+                opBadge.className = getOpBadgeClass(row.mode, hasValue);
+                opBadge.textContent = row.mode === "sub" ? "−" : "+";
+                opBadge.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    toggleRowMode(index);
+                });
+
+                const inputEl = document.createElement("input");
+                inputEl.type = "text";
+                inputEl.inputMode = "decimal";
+                inputEl.id = `cellInput-${index}`;
+                inputEl.value = row.rawInput;
+                inputEl.autocomplete = "off";
+                inputEl.spellcheck = false;
+                inputEl.placeholder = "0";
+                inputEl.setAttribute("aria-label", `Row ${row.sn} input`);
+                inputEl.className = `excel-input placeholder:text-slate-300 ${row.mode === "sub" ? "subtract-mode" : ""}`;
+
+                inputEl.addEventListener("focus", () => {
+                    setActiveRow(index, false);
+                });
+
+                inputEl.addEventListener("input", (e) => {
+                    handleCellInput(index, e.target.value);
+                });
+
+                inputEl.addEventListener("keydown", (e) => {
+                    handleCellKeyDown(e, index);
+                });
+
+                const clearBtn = document.createElement("button");
+                clearBtn.type = "button";
+                clearBtn.tabIndex = -1;
+                clearBtn.id = `clearCellBtn-${index}`;
+                clearBtn.title = "Clear cell";
+                clearBtn.className = `absolute right-2 z-10 w-5 h-5 rounded-full text-[10px] text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition ${
+                    hasValue ? "opacity-100" : "opacity-0 pointer-events-none"
+                }`;
+                clearBtn.innerHTML = `<i class="fa-solid fa-xmark"></i>`;
+                clearBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    appState.rows[index].rawInput = "";
+                    appState.rows[index].mode = "add";
+                    inputEl.value = "";
+                    updateRowDOM(index);
+                    inputEl.focus();
+                });
+
+                cellWrap.appendChild(opBadge);
+                cellWrap.appendChild(inputEl);
+                cellWrap.appendChild(clearBtn);
+                tdInput.appendChild(cellWrap);
+                tr.appendChild(tdInput);
+
+                // 3. "Multiple" Column
+                const tdMultiple = document.createElement("td");
+                tdMultiple.id = `multipleCell-${index}`;
+                tdMultiple.className = `themed-td multiple-cell ${
+                    calc.multiple < 0 ? "subtract-mode" : ""
+                }`;
+                tdMultiple.textContent = formatNumber(calc.multiple);
+                tr.appendChild(tdMultiple);
+
+                tbody.appendChild(tr);
+            });
+
+            recalculateTotals();
+        }
+
+        function handleCellInput(index, value) {
+            const row = appState.rows[index];
+            if (!row) return;
+            const inputEl = document.getElementById(`cellInput-${index}`);
+
+            if (value.startsWith("-")) {
+                row.mode = "sub";
+                value = value.slice(1);
+                if (inputEl) inputEl.value = value;
+            } else if (value.startsWith("+")) {
+                row.mode = "add";
+                value = value.slice(1);
+                if (inputEl) inputEl.value = value;
+            }
+
+            row.rawInput = value;
+            updateRowDOM(index);
+        }
+
+        function updateRowDOM(index) {
+            const row = appState.rows[index];
+            if (!row) return;
+
+            const calc = computeRow(row, appState.multiplier);
+            const hasValue = row.rawInput.trim() !== "";
+            const isActive = index === appState.activeRowIndex;
+
+            const tdInput = document.getElementById(`inputCellContainer-${index}`);
+            const inputEl = document.getElementById(`cellInput-${index}`);
+            const opBadge = document.getElementById(`opBadge-${index}`);
+            const clearBtn = document.getElementById(`clearCellBtn-${index}`);
+            const tdMultiple = document.getElementById(`multipleCell-${index}`);
+
+            if (tdInput) {
+                tdInput.className = `themed-td input-cell-td ${
+                    isActive ? "active-excel-cell" : ""
+                } ${row.mode === "sub" && hasValue ? "bg-rose-50/40" : "bg-white"}`;
+            }
+
+            if (inputEl) {
+                inputEl.className = `excel-input placeholder:text-slate-300 ${row.mode === "sub" ? "subtract-mode" : ""}`;
+            }
+
+            if (opBadge) {
+                opBadge.textContent = row.mode === "sub" ? "−" : "+";
+                opBadge.className = getOpBadgeClass(row.mode, hasValue);
+            }
+
+            if (clearBtn) {
+                if (hasValue) {
+                    clearBtn.classList.remove("opacity-0", "pointer-events-none");
+                    clearBtn.classList.add("opacity-100");
+                } else {
+                    clearBtn.classList.add("opacity-0", "pointer-events-none");
+                    clearBtn.classList.remove("opacity-100");
+                }
+            }
+
+            if (tdMultiple) {
+                tdMultiple.textContent = formatNumber(calc.multiple);
+                tdMultiple.className = `themed-td multiple-cell ${
+                    calc.multiple < 0 ? "subtract-mode" : ""
+                }`;
+            }
+
+            recalculateTotals();
+        }
+
+        function toggleRowMode(index) {
+            const row = appState.rows[index];
+            if (!row) return;
+            row.mode = row.mode === "add" ? "sub" : "add";
+            setActiveRow(index, true);
+            updateRowDOM(index);
+        }
+
+        function recalculateTotals() {
+            let addedSum = 0;
+            let subtractedSum = 0;
+
+            for (const row of appState.rows) {
+                const calc = computeRow(row, appState.multiplier);
+                if (calc.multiple >= 0) {
+                    addedSum += calc.multiple;
+                } else {
+                    subtractedSum += Math.abs(calc.multiple);
+                }
+            }
+
+            const netTotal = Number((addedSum - subtractedSum).toFixed(4));
+            const formattedNet = formatNumber(netTotal);
+
+            const grandTotalEl = document.getElementById("stickyGrandTotal");
+            if (grandTotalEl) {
+                if (grandTotalEl.textContent.trim() !== formattedNet) {
+                    grandTotalEl.textContent = formattedNet;
+                    grandTotalEl.classList.remove("total-pop");
+                    void grandTotalEl.offsetWidth;
+                    grandTotalEl.classList.add("total-pop");
+                }
+                grandTotalEl.className = `font-light text-4xl sm:text-5xl tracking-tight font-mono block ${
+                    netTotal < 0 ? "text-rose-600" : "text-slate-900"
+                }`;
+            }
+
+            const addedBadge = document.getElementById("badgeAddedTotal");
+            const subBadge = document.getElementById("badgeSubtractedTotal");
+            if (addedBadge) addedBadge.textContent = formatNumber(addedSum);
+            if (subBadge) subBadge.textContent = formatNumber(subtractedSum);
+        }
+
+        function setActiveRow(index, shouldFocus = true) {
+            const prevIndex = appState.activeRowIndex;
+            appState.activeRowIndex = index;
+
+            const prevTd = document.getElementById(`inputCellContainer-${prevIndex}`);
+            const prevSn = document.getElementById(`snCell-${prevIndex}`);
+            if (prevTd) prevTd.classList.remove("active-excel-cell");
+            if (prevSn) prevSn.classList.remove("sn-active");
+
+            const nextTd = document.getElementById(`inputCellContainer-${index}`);
+            const nextSn = document.getElementById(`snCell-${index}`);
+            if (nextTd) nextTd.classList.add("active-excel-cell");
+            if (nextSn) nextSn.classList.add("sn-active");
+
+            if (shouldFocus) {
+                const inputEl = document.getElementById(`cellInput-${index}`);
+                if (inputEl) inputEl.focus();
+            }
+        }
+
+        function handleCellKeyDown(e, index) {
+            if (e.key === "Enter" || e.key === "ArrowDown") {
+                e.preventDefault();
+                if (index + 1 < appState.rows.length) {
+                    setActiveRow(index + 1, true);
+                } else {
+                    addRows(1);
+                    setActiveRow(index + 1, true);
+                }
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                if (index - 1 >= 0) {
+                    setActiveRow(index - 1, true);
+                }
+            }
+        }
+
+        function addRows(count = 1) {
+            const currentLength = appState.rows.length;
+            for (let i = 1; i <= count; i++) {
+                appState.rows.push({
+                    sn: currentLength + i,
+                    rawInput: "",
+                    mode: "add"
+                });
+            }
+            renderSpreadsheet();
+        }
+
+        function removeLastRow() {
+            if (appState.rows.length <= 1) {
+                showToast("Minimum 1 row required");
+                return;
+            }
+            appState.rows.pop();
+            if (appState.activeRowIndex >= appState.rows.length) {
+                appState.activeRowIndex = appState.rows.length - 1;
+            }
+            renderSpreadsheet();
+            setActiveRow(appState.activeRowIndex, true);
+        }
+
+        function exportToCSV() {
+            const multHeader = `${appState.multiplier} = 1`;
+            const csvRows = [
+                ["S.N.", multHeader, "Operation", "Multiple"]
+            ];
+
+            let netTotal = 0;
+            for (const row of appState.rows) {
+                const calc = computeRow(row, appState.multiplier);
+                netTotal += calc.multiple;
+                const opSymbol = row.mode === "sub" ? "-" : "+";
+                csvRows.push([
+                    row.sn,
+                    row.rawInput.trim() === "" ? "" : `${opSymbol}${row.rawInput.trim()}`,
+                    row.mode === "sub" ? "Subtract" : "Add",
+                    formatNumber(calc.multiple)
+                ]);
+            }
+
+            csvRows.push(["", "", "TOTAL", formatNumber(netTotal)]);
+
+            const csvContent = csvRows
+                .map((r) => r.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(","))
+                .join("\r\n");
+
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, "0");
+            const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+            const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+            const fileName = `${dateStr}_${timeStr}.csv`;
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            showToast(`Exported: ${fileName}`);
+        }
+
+        // Initialize Table Calculator State & Events
+        window.addEventListener("DOMContentLoaded", () => {
+            initBlankRows(INITIAL_ROW_COUNT);
+            renderSpreadsheet();
+
+            document.getElementById("btnAddRow")?.addEventListener("click", () => {
+                addRows(1);
+                setActiveRow(appState.rows.length - 1, true);
+            });
+
+            document.getElementById("btnRemoveRow")?.addEventListener("click", () => {
+                removeLastRow();
+            });
+
+            document.getElementById("btnClearAll")?.addEventListener("click", () => {
+                initBlankRows(INITIAL_ROW_COUNT);
+                renderSpreadsheet();
+                setActiveRow(0, true);
+                showToast("Cleared table");
+            });
+
+            document.getElementById("btnExportCSV")?.addEventListener("click", () => {
+                exportToCSV();
+            });
+
+            document.getElementById("multiplierInput")?.addEventListener("input", (e) => {
+                const parsed = parseFloat(e.target.value);
+                appState.multiplier = isNaN(parsed) ? 0 : parsed;
+                appState.rows.forEach((_, idx) => updateRowDOM(idx));
+            });
+        });
     </script>
 </body>
 </html>
