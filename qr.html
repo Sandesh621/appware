@@ -1,0 +1,3086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR & Barcode Studio Pro — Client-Side Generator & Scanner</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca'
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Client-Side Libraries (No Backend APIs) -->
+  <!-- 1. QR Code Styling (Custom dots, eyes, gradients, logos) -->
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+  <!-- 2. JsBarcode (All 1D Barcode formats) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <!-- 3. HTML5-QRCode (Multi-format Camera & Image Scanner for QR + 1D Barcodes) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- 4. jsQR (Fast supplemental QR canvas reader for multi-pass image scanning) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+  <style>
+    /* Custom Scrollbars & Transparency Grid */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.55);
+    }
+
+    .checkerboard-bg {
+      background-color: #f8fafc;
+      background-image: 
+        linear-gradient(45deg, #e2e8f0 25%, transparent 25%), 
+        linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #e2e8f0 75%), 
+        linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    .dark .checkerboard-bg {
+      background-color: #0f172a;
+      background-image: 
+        linear-gradient(45deg, #1e293b 25%, transparent 25%), 
+        linear-gradient(-45deg, #1e293b 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #1e2e3b 75%), 
+        linear-gradient(-45deg, transparent 75%, #1e293b 75%);
+    }
+
+    /* Scanner Laser Animation */
+    @keyframes scanLaser {
+      0% { top: 8%; opacity: 0.4; }
+      50% { top: 88%; opacity: 1; }
+      100% { top: 8%; opacity: 0.4; }
+    }
+    .laser-line {
+      position: absolute;
+      left: 6%;
+      right: 6%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #6366f1, #ec4899, #6366f1, transparent);
+      box-shadow: 0 0 12px 2px rgba(99, 102, 241, 0.85);
+      animation: scanLaser 2.4s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* Hide ugly default html5-qrcode borders when using custom UI */
+    #camera-reader video {
+      border-radius: 0.75rem;
+      object-fit: cover;
+      width: 100% !important;
+      transform: scaleX(-1);
+    }
+
+    /* Print sheet specific styles */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #print-area-container, #print-area-container * {
+        visibility: visible;
+      }
+      #print-area-container {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white !important;
+        color: black !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen flex flex-col font-sans selection:bg-brand-500 selection:text-white transition-colors duration-200">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Top Header Navigation -->
+  <header class="sticky top-0 z-40 backdrop-blur-xl bg-white/85 dark:bg-slate-900/85 border-b border-slate-200/80 dark:border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/25">
+          <i class="fa-solid fa-qrcode text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-base sm:text-lg tracking-tight bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+              QR &amp; Barcode Studio
+            </h1>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              100% Local
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">
+            Zero-API Generator, Designer &amp; Multi-Format Scanner
+          </p>
+        </div>
+      </div>
+
+      <!-- Primary Mode Switcher Tabs -->
+      <nav class="flex items-center bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/70 dark:border-slate-700/70">
+        <button onclick="switchMainTab('qr')" id="main-tab-qr" class="main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm">
+          <i class="fa-solid fa-qrcode"></i>
+          <span>QR Studio</span>
+        </button>
+        <button onclick="switchMainTab('barcode')" id="main-tab-barcode" class="main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+          <i class="fa-solid fa-barcode"></i>
+          <span>Barcode</span>
+        </button>
+        <button onclick="switchMainTab('scanner')" id="main-tab-scanner" class="main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white">
+          <i class="fa-solid fa-camera-viewfinder"></i>
+          <span>Scanner</span>
+        </button>
+        <button onclick="switchMainTab('history')" id="main-tab-history" class="main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white relative">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span class="hidden md:inline">History</span>
+          <span id="history-count-badge" class="px-1.5 py-0.2 rounded-full text-[10px] bg-brand-500/20 text-brand-600 dark:text-brand-300 font-mono">0</span>
+        </button>
+      </nav>
+
+      <!-- Utility Actions (Print Sheet & Theme Toggle) -->
+      <div class="flex items-center gap-2">
+        <button onclick="openPrintModal()" title="Print Label Sheet" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition">
+          <i class="fa-solid fa-print text-brand-500"></i>
+          <span>Print Sheet</span>
+        </button>
+        <button onclick="toggleTheme()" id="theme-toggle-btn" aria-label="Toggle theme" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 transition">
+          <i class="fa-solid fa-sun hidden dark:inline text-amber-400"></i>
+          <i class="fa-solid fa-moon inline dark:hidden text-slate-600"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ==========================================
+         VIEW 1 & 2: GENERATOR WORKSPACE (QR + BARCODE)
+         ========================================== -->
+    <div id="generator-workspace" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN: CONFIGURATION & CUSTOMIZATION (7 Cols) -->
+      <div class="lg:col-span-7 space-y-6">
+
+        <!-- ==========================================
+             PANEL A: QR CODE GENERATOR CONTROLS
+             ========================================== -->
+        <div id="qr-controls-panel" class="space-y-6">
+
+          <!-- Step 1: Select QR Content Type -->
+          <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center">1</span>
+                Select QR Data Type
+              </h2>
+              <span id="qr-payload-length" class="text-xs font-mono text-slate-400 dark:text-slate-500">24 chars</span>
+            </div>
+
+            <!-- 11 Content Type Pills -->
+            <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2" id="qr-type-grid">
+              <button onclick="setQrDataType('url')" data-qrtype="url" class="qr-type-btn active flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-globe text-base mb-1"></i>
+                <span>URL</span>
+              </button>
+              <button onclick="setQrDataType('text')" data-qrtype="text" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-align-left text-base mb-1"></i>
+                <span>Text</span>
+              </button>
+              <button onclick="setQrDataType('wifi')" data-qrtype="wifi" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-wifi text-base mb-1"></i>
+                <span>Wi-Fi</span>
+              </button>
+              <button onclick="setQrDataType('vcard')" data-qrtype="vcard" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-address-card text-base mb-1"></i>
+                <span>vCard</span>
+              </button>
+              <button onclick="setQrDataType('email')" data-qrtype="email" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-envelope text-base mb-1"></i>
+                <span>Email</span>
+              </button>
+              <button onclick="setQrDataType('sms')" data-qrtype="sms" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-comment-sms text-base mb-1"></i>
+                <span>SMS</span>
+              </button>
+              <button onclick="setQrDataType('phone')" data-qrtype="phone" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-phone text-base mb-1"></i>
+                <span>Phone</span>
+              </button>
+              <button onclick="setQrDataType('whatsapp')" data-qrtype="whatsapp" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-brands fa-whatsapp text-base mb-1"></i>
+                <span>WhatsApp</span>
+              </button>
+              <button onclick="setQrDataType('geo')" data-qrtype="geo" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-location-dot text-base mb-1"></i>
+                <span>Location</span>
+              </button>
+              <button onclick="setQrDataType('event')" data-qrtype="event" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-solid fa-calendar-check text-base mb-1"></i>
+                <span>Event</span>
+              </button>
+              <button onclick="setQrDataType('crypto')" data-qrtype="crypto" class="qr-type-btn flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all">
+                <i class="fa-brands fa-bitcoin text-base mb-1"></i>
+                <span>Crypto</span>
+              </button>
+            </div>
+
+            <!-- Dynamic Smart Forms Container -->
+            <div class="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800/80">
+              
+              <!-- FORM: URL -->
+              <div id="qr-form-url" class="qr-data-form space-y-3">
+                <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Website URL</label>
+                <div class="relative">
+                  <i class="fa-solid fa-link absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                  <input type="url" id="qr-url-input" value="https://example.com" oninput="triggerQrUpdate()" placeholder="https://yourwebsite.com" class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                </div>
+                <div class="flex flex-wrap gap-1.5 text-xs">
+                  <span class="text-slate-400 py-1">Quick prefix:</span>
+                  <button onclick="setUrlPrefix('https://')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-brand-500/10 hover:text-brand-500 font-mono transition">https://</button>
+                  <button onclick="setUrlPrefix('http://')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-brand-500/10 hover:text-brand-500 font-mono transition">http://</button>
+                </div>
+              </div>
+
+              <!-- FORM: PLAIN TEXT -->
+              <div id="qr-form-text" class="qr-data-form hidden space-y-3">
+                <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Plain Text / Notes / JSON</label>
+                <textarea id="qr-text-input" rows="3" oninput="triggerQrUpdate()" placeholder="Enter any text, serial code, or message..." class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">Welcome to QR & Barcode Studio Pro!</textarea>
+              </div>
+
+              <!-- FORM: WI-FI -->
+              <div id="qr-form-wifi" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Network Name (SSID) *</label>
+                    <input type="text" id="qr-wifi-ssid" value="Studio_5G_Guest" oninput="triggerQrUpdate()" placeholder="MyHomeWiFi" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Password</label>
+                    <input type="text" id="qr-wifi-pass" value="SuperSecret2025!" oninput="triggerQrUpdate()" placeholder="Network Password" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Security / Encryption</label>
+                    <select id="qr-wifi-type" onchange="triggerQrUpdate()" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                      <option value="WPA">WPA / WPA2 / WPA3</option>
+                      <option value="WEP">WEP</option>
+                      <option value="nopass">None (Open Network)</option>
+                    </select>
+                  </div>
+                  <div class="pt-4">
+                    <label class="inline-flex items-center gap-2 cursor-pointer text-sm">
+                      <input type="checkbox" id="qr-wifi-hidden" onchange="triggerQrUpdate()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                      <span>Hidden Network</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- FORM: VCARD CONTACT -->
+              <div id="qr-form-vcard" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">First Name</label>
+                    <input type="text" id="qr-vcard-fn" value="Alex" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Last Name</label>
+                    <input type="text" id="qr-vcard-ln" value="Morgan" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Phone Number</label>
+                    <input type="tel" id="qr-vcard-tel" value="+1 (555) 234-5678" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email</label>
+                    <input type="email" id="qr-vcard-email" value="alex@studio.dev" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Organization / Company</label>
+                    <input type="text" id="qr-vcard-org" value="Nexus Creative Labs" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Job Title</label>
+                    <input type="text" id="qr-vcard-title" value="Product Architect" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Website</label>
+                    <input type="url" id="qr-vcard-url" value="https://studio.dev" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">City / Address</label>
+                    <input type="text" id="qr-vcard-adr" value="San Francisco, CA" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- FORM: EMAIL -->
+              <div id="qr-form-email" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Recipient Email</label>
+                    <input type="email" id="qr-email-to" value="hello@example.com" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Subject</label>
+                    <input type="text" id="qr-email-sub" value="Project Inquiry" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Message Body</label>
+                  <textarea id="qr-email-body" rows="2" oninput="triggerQrUpdate()" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm">Hi team, I scanned your QR code and would love to connect!</textarea>
+                </div>
+              </div>
+
+              <!-- FORM: SMS -->
+              <div id="qr-form-sms" class="qr-data-form hidden space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Phone Number</label>
+                  <input type="tel" id="qr-sms-tel" value="+15559876543" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">SMS Text Message</label>
+                  <textarea id="qr-sms-body" rows="2" oninput="triggerQrUpdate()" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm">Hello! Please send me more details.</textarea>
+                </div>
+              </div>
+
+              <!-- FORM: PHONE -->
+              <div id="qr-form-phone" class="qr-data-form hidden space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Phone Number to Call</label>
+                  <input type="tel" id="qr-phone-tel" value="+15551234567" oninput="triggerQrUpdate()" placeholder="+1 555 123 4567" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                </div>
+              </div>
+
+              <!-- FORM: WHATSAPP -->
+              <div id="qr-form-whatsapp" class="qr-data-form hidden space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">WhatsApp Number (with country code, digits only)</label>
+                  <input type="tel" id="qr-wa-phone" value="15551234567" oninput="triggerQrUpdate()" placeholder="15551234567" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Pre-filled Chat Message</label>
+                  <input type="text" id="qr-wa-msg" value="Hi! I just scanned your WhatsApp QR code." oninput="triggerQrUpdate()" class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                </div>
+              </div>
+
+              <!-- FORM: GEO LOCATION -->
+              <div id="qr-form-geo" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Latitude</label>
+                    <input type="text" id="qr-geo-lat" value="37.7749" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Longitude</label>
+                    <input type="text" id="qr-geo-lng" value="-122.4194" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Place Query / Label (Optional)</label>
+                  <input type="text" id="qr-geo-q" value="San Francisco, CA" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                </div>
+              </div>
+
+              <!-- FORM: CALENDAR EVENT -->
+              <div id="qr-form-event" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div class="sm:col-span-2">
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Event Title</label>
+                    <input type="text" id="qr-event-title" value="Product Launch Keynote" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Start Date &amp; Time</label>
+                    <input type="datetime-local" id="qr-event-start" value="2025-06-15T10:00" onchange="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">End Date &amp; Time</label>
+                    <input type="datetime-local" id="qr-event-end" value="2025-06-15T12:00" onchange="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Location</label>
+                    <input type="text" id="qr-event-loc" value="Moscone Center, Hall A" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Description</label>
+                    <input type="text" id="qr-event-desc" value="Annual Developer Summit" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- FORM: CRYPTO PAYMENT -->
+              <div id="qr-form-crypto" class="qr-data-form hidden space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Network</label>
+                    <select id="qr-crypto-coin" onchange="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm">
+                      <option value="bitcoin">Bitcoin (BTC)</option>
+                      <option value="ethereum">Ethereum (ETH)</option>
+                      <option value="solana">Solana (SOL)</option>
+                      <option value="litecoin">Litecoin (LTC)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Amount (Optional)</label>
+                    <input type="number" step="any" id="qr-crypto-amt" value="0.025" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Label / Note</label>
+                    <input type="text" id="qr-crypto-label" value="Coffee Donation" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Wallet Address</label>
+                  <input type="text" id="qr-crypto-addr" value="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh" oninput="triggerQrUpdate()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono" />
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- Step 2: Deep QR Customization Studio -->
+          <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center">2</span>
+                Customize QR Design
+              </h2>
+              <button onclick="resetQrDesign()" class="text-xs text-slate-400 hover:text-brand-500 flex items-center gap-1 transition">
+                <i class="fa-solid fa-rotate-left"></i> Reset Style
+              </button>
+            </div>
+
+            <!-- Instant Designer Theme Presets -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Instant Style Presets</label>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <button onclick="applyQrPreset('classic')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-slate-900 border border-slate-300 shrink-0"></span>
+                  <span class="truncate">Classic Dark</span>
+                </button>
+                <button onclick="applyQrPreset('cyber')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-indigo-600 to-pink-500 shrink-0"></span>
+                  <span class="truncate">Cyber Neon</span>
+                </button>
+                <button onclick="applyQrPreset('ocean')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 to-cyan-400 shrink-0"></span>
+                  <span class="truncate">Ocean Breeze</span>
+                </button>
+                <button onclick="applyQrPreset('emerald')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-emerald-700 to-teal-400 shrink-0"></span>
+                  <span class="truncate">Emerald</span>
+                </button>
+                <button onclick="applyQrPreset('sunset')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-rose-600 to-orange-500 shrink-0"></span>
+                  <span class="truncate">Sunset Vibes</span>
+                </button>
+                <button onclick="applyQrPreset('royal')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-amber-600 to-yellow-500 shrink-0"></span>
+                  <span class="truncate">Royal Gold</span>
+                </button>
+                <button onclick="applyQrPreset('berry')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-700 to-fuchsia-500 shrink-0"></span>
+                  <span class="truncate">Berry Glow</span>
+                </button>
+                <button onclick="applyQrPreset('minimal')" class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 text-xs font-medium transition">
+                  <span class="w-4 h-4 rounded-full bg-slate-700 shrink-0"></span>
+                  <span class="truncate">Soft Dots</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Customizer Sub-Navigation Tabs -->
+            <div class="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto">
+              <button onclick="switchQrSubTab('shapes')" id="qr-subtab-shapes" class="qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-brand-500 text-brand-600 dark:text-brand-400 whitespace-nowrap">
+                <i class="fa-solid fa-shapes mr-1"></i> Shapes &amp; Eyes
+              </button>
+              <button onclick="switchQrSubTab('colors')" id="qr-subtab-colors" class="qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 whitespace-nowrap">
+                <i class="fa-solid fa-palette mr-1"></i> Colors &amp; Gradients
+              </button>
+              <button onclick="switchQrSubTab('logo')" id="qr-subtab-logo" class="qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 whitespace-nowrap">
+                <i class="fa-solid fa-image mr-1"></i> Center Logo
+              </button>
+              <button onclick="switchQrSubTab('frame')" id="qr-subtab-frame" class="qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 whitespace-nowrap">
+                <i class="fa-solid fa-crop-simple mr-1"></i> Frame &amp; Size
+              </button>
+            </div>
+
+            <!-- SUB-TAB 1: SHAPES & EYES -->
+            <div id="qr-subpanel-shapes" class="qr-subpanel space-y-4">
+              <!-- Module / Dot Pattern -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Pattern Module Style (Body Dots)</label>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  <button onclick="setQrDotType('square')" data-dottype="square" class="qr-dot-btn active p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>
+                    <span>Square</span>
+                  </button>
+                  <button onclick="setQrDotType('dots')" data-dottype="dots" class="qr-dot-btn p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><circle cx="7" cy="7" r="4"/><circle cx="17" cy="7" r="4"/><circle cx="7" cy="17" r="4"/><circle cx="17" cy="17" r="4"/></svg>
+                    <span>Dots</span>
+                  </button>
+                  <button onclick="setQrDotType('rounded')" data-dottype="rounded" class="qr-dot-btn p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5"/><rect x="3" y="13" width="8" height="8" rx="2.5"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>
+                    <span>Rounded</span>
+                  </button>
+                  <button onclick="setQrDotType('extra-rounded')" data-dottype="extra-rounded" class="qr-dot-btn p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="4"/><rect x="13" y="3" width="8" height="8" rx="3.5"/><rect x="3" y="13" width="8" height="8" rx="3.5"/><rect x="13" y="13" width="8" height="8" rx="4"/></svg>
+                    <span>Smooth</span>
+                  </button>
+                  <button onclick="setQrDotType('classy')" data-dottype="classy" class="qr-dot-btn p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 4a4 4 0 014-4h4v4a4 4 0 01-4 4h-4v-4z"/></svg>
+                    <span>Classy</span>
+                  </button>
+                  <button onclick="setQrDotType('classy-rounded')" data-dottype="classy-rounded" class="qr-dot-btn p-2.5 rounded-xl border text-xs font-medium flex flex-col items-center gap-1.5 transition">
+                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M3 7a4 4 0 014-4h4v8H3V7zm10-4h4a4 4 0 014 4v4h-8V3zM3 13h8v8H7a4 4 0 01-4-4v-4zm10 0h8v4a4 4 0 01-4 4h-4v-8z"/></svg>
+                    <span>Diamond</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Corner Eye Frame & Corner Eye Ball -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Corner Eye Frame (Outer)</label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setQrCornerSquareType('square')" data-csqtype="square" class="qr-csq-btn active p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-5 h-5 border-2 border-current"></span>
+                      <span>Square</span>
+                    </button>
+                    <button onclick="setQrCornerSquareType('extra-rounded')" data-csqtype="extra-rounded" class="qr-csq-btn p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-5 h-5 border-2 border-current rounded-md"></span>
+                      <span>Rounded</span>
+                    </button>
+                    <button onclick="setQrCornerSquareType('dot')" data-csqtype="dot" class="qr-csq-btn p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-5 h-5 border-2 border-current rounded-full"></span>
+                      <span>Circle</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Corner Eye Ball (Inner)</label>
+                  <div class="grid grid-cols-3 gap-2">
+                    <button onclick="setQrCornerDotType('square')" data-cdottype="square" class="qr-cdot-btn active p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-3.5 h-3.5 bg-current"></span>
+                      <span>Square</span>
+                    </button>
+                    <button onclick="setQrCornerDotType('dot')" data-cdottype="dot" class="qr-cdot-btn p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-3.5 h-3.5 bg-current rounded-full"></span>
+                      <span>Circle</span>
+                    </button>
+                    <button onclick="setQrCornerDotType('extra-rounded')" data-cdottype="extra-rounded" class="qr-cdot-btn p-2 rounded-xl border text-xs font-medium flex flex-col items-center gap-1 transition">
+                      <span class="w-3.5 h-3.5 bg-current rounded-[4px]"></span>
+                      <span>Rounded</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SUB-TAB 2: COLORS & GRADIENTS -->
+            <div id="qr-subpanel-colors" class="qr-subpanel hidden space-y-4">
+              <!-- Dots Color / Gradient Toggle -->
+              <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">Foreground Pattern Color</span>
+                  <div class="inline-flex rounded-lg bg-slate-200/80 dark:bg-slate-900 p-0.5 text-xs">
+                    <button onclick="setQrColorMode('solid')" id="qr-colormode-solid" class="px-2.5 py-1 rounded-md font-medium bg-white dark:bg-slate-800 shadow-sm">Solid</button>
+                    <button onclick="setQrColorMode('gradient')" id="qr-colormode-gradient" class="px-2.5 py-1 rounded-md font-medium text-slate-500">Gradient</button>
+                  </div>
+                </div>
+
+                <!-- Solid Color Picker -->
+                <div id="qr-solid-color-row" class="flex items-center gap-3">
+                  <input type="color" id="qr-dot-color-1" value="#0f172a" oninput="triggerQrUpdate()" class="w-10 h-10 rounded-lg cursor-pointer border-0 bg-transparent" />
+                  <input type="text" id="qr-dot-color-1-hex" value="#0f172a" oninput="syncHexInput('qr-dot-color-1', this.value)" class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono w-28" />
+                </div>
+
+                <!-- Gradient Pickers -->
+                <div id="qr-gradient-color-row" class="hidden space-y-3">
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="qr-grad-color-1" value="#4f46e5" oninput="triggerQrUpdate()" class="w-9 h-9 rounded-lg cursor-pointer" />
+                      <div class="text-xs">
+                        <div class="text-slate-400">Start Color</div>
+                        <span id="qr-grad-1-label" class="font-mono">#4f46e5</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="qr-grad-color-2" value="#ec4899" oninput="triggerQrUpdate()" class="w-9 h-9 rounded-lg cursor-pointer" />
+                      <div class="text-xs">
+                        <div class="text-slate-400">End Color</div>
+                        <span id="qr-grad-2-label" class="font-mono">#ec4899</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                    <div>
+                      <label class="block text-xs text-slate-500 mb-1">Gradient Type</label>
+                      <select id="qr-grad-type" onchange="triggerQrUpdate()" class="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+                        <option value="linear">Linear Gradient</option>
+                        <option value="radial">Radial Gradient</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs text-slate-500 mb-1">Angle: <span id="qr-grad-rot-val">45°</span></label>
+                      <input type="range" id="qr-grad-rotation" min="0" max="360" value="45" oninput="document.getElementById('qr-grad-rot-val').textContent=this.value+'°';triggerQrUpdate()" class="w-full accent-brand-500" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Corner Eyes Custom Colors -->
+              <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 space-y-3">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">Custom Corner Eye Colors</span>
+                  <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" id="qr-custom-eye-color" onchange="toggleCustomEyeColors()" class="rounded text-brand-600 focus:ring-brand-500" />
+                    <span>Override Eye Colors</span>
+                  </label>
+                </div>
+                <div id="qr-eye-colors-controls" class="hidden grid grid-cols-2 gap-3 pt-1">
+                  <div class="flex items-center gap-2">
+                    <input type="color" id="qr-eye-frame-color" value="#4f46e5" oninput="triggerQrUpdate()" class="w-8 h-8 rounded cursor-pointer" />
+                    <span class="text-xs">Outer Eye Frame</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input type="color" id="qr-eye-ball-color" value="#ec4899" oninput="triggerQrUpdate()" class="w-8 h-8 rounded cursor-pointer" />
+                    <span class="text-xs">Inner Eye Ball</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Background Color -->
+              <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <input type="color" id="qr-bg-color" value="#ffffff" oninput="triggerQrUpdate()" class="w-9 h-9 rounded-lg cursor-pointer" />
+                  <div>
+                    <div class="text-xs font-semibold text-slate-700 dark:text-slate-200">Background Color</div>
+                    <div class="text-[11px] text-slate-400">Keep light for best scan reliability</div>
+                  </div>
+                </div>
+                <label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input type="checkbox" id="qr-bg-transparent" onchange="triggerQrUpdate()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                  <span>Transparent Background</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- SUB-TAB 3: CENTER LOGO / ICON -->
+            <div id="qr-subpanel-logo" class="qr-subpanel hidden space-y-4">
+              <!-- Upload Custom Image -->
+              <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-dashed border-slate-300 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-brand-500/10 text-brand-500 flex items-center justify-center">
+                    <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold">Upload Custom Center Logo</div>
+                    <div class="text-[11px] text-slate-400">PNG, SVG, JPG, or WEBP supported</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <label class="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium cursor-pointer transition">
+                    <span>Choose File</span>
+                    <input type="file" id="qr-logo-upload" accept="image/*" onchange="handleCustomLogoUpload(event)" class="hidden" />
+                  </label>
+                  <button onclick="clearQrLogo()" class="px-2.5 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-rose-500/20 hover:text-rose-500 text-xs transition" title="Remove Logo">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Built-in Vector Icon Presets -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Or Pick a Built-In Vector Badge</label>
+                <div class="grid grid-cols-5 sm:grid-cols-8 gap-2" id="qr-preset-logos">
+                  <button onclick="selectPresetLogo('none')" class=" p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="No Logo">
+                    <i class="fa-solid fa-ban text-slate-400"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('globe')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Website">
+                    <i class="fa-solid fa-globe text-blue-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('wifi')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Wi-Fi">
+                    <i class="fa-solid fa-wifi text-indigo-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('vcard')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Contact">
+                    <i class="fa-solid fa-id-badge text-emerald-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('email')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Email">
+                    <i class="fa-solid fa-envelope text-rose-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('whatsapp')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="WhatsApp">
+                    <i class="fa-brands fa-whatsapp text-green-500 text-lg"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('phone')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Phone">
+                    <i class="fa-solid fa-phone text-teal-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('location')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Location Pin">
+                    <i class="fa-solid fa-location-dot text-red-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('bitcoin')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Bitcoin">
+                    <i class="fa-brands fa-bitcoin text-amber-500 text-lg"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('youtube')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="YouTube">
+                    <i class="fa-brands fa-youtube text-red-600 text-lg"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('instagram')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Instagram">
+                    <i class="fa-brands fa-instagram text-pink-500 text-lg"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('github')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="GitHub">
+                    <i class="fa-brands fa-github text-slate-700 dark:text-white text-lg"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('cart')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Shop">
+                    <i class="fa-solid fa-bag-shopping text-purple-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('star')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Star">
+                    <i class="fa-solid fa-star text-yellow-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('heart')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Heart">
+                    <i class="fa-solid fa-heart text-rose-500 text-base"></i>
+                  </button>
+                  <button onclick="selectPresetLogo('check')" class="p-2 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 flex flex-col items-center justify-center text-xs gap-1 h-12" title="Verified">
+                    <i class="fa-solid fa-circle-check text-sky-500 text-base"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Logo Sizing & Margin Controls -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Logo Size Ratio: <span id="qr-logo-size-val">0.35</span></label>
+                  <input type="range" id="qr-logo-size" min="0.15" max="0.45" step="0.02" value="0.35" oninput="document.getElementById('qr-logo-size-val').textContent=this.value;triggerQrUpdate()" class="w-full accent-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Logo Padding: <span id="qr-logo-margin-val">6px</span></label>
+                  <input type="range" id="qr-logo-margin" min="0" max="20" step="1" value="6" oninput="document.getElementById('qr-logo-margin-val').textContent=this.value+'px';triggerQrUpdate()" class="w-full accent-brand-500" />
+                </div>
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input type="checkbox" id="qr-logo-hide-dots" checked onchange="triggerQrUpdate()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                  <span>Clear QR Dots Behind Center Logo</span>
+                </label>
+                <span class="text-[11px] text-amber-600 dark:text-amber-400">Tip: Use High (H) Error Correction with logos</span>
+              </div>
+            </div>
+
+            <!-- SUB-TAB 4: DECORATIVE FRAME, DIMENSIONS & ECC -->
+            <div id="qr-subpanel-frame" class="qr-subpanel hidden space-y-4">
+              <!-- Decorative Badge Frame -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">Decorative Outer Frame Style</label>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button onclick="setQrFrameStyle('none')" data-framestyle="none" class="qr-frame-btn active p-2.5 rounded-xl border text-xs font-medium transition">No Frame</button>
+                  <button onclick="setQrFrameStyle('bottom-banner')" data-framestyle="bottom-banner" class="qr-frame-btn p-2.5 rounded-xl border text-xs font-medium transition">Bottom Pill</button>
+                  <button onclick="setQrFrameStyle('top-banner')" data-framestyle="top-banner" class="qr-frame-btn p-2.5 rounded-xl border text-xs font-medium transition">Top Header</button>
+                  <button onclick="setQrFrameStyle('card-badge')" data-framestyle="card-badge" class="qr-frame-btn p-2.5 rounded-xl border text-xs font-medium transition">Badge Card</button>
+                </div>
+              </div>
+
+              <!-- Frame Customization Inputs -->
+              <div id="qr-frame-options" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Frame Call-to-Action Text</label>
+                  <input type="text" id="qr-frame-text" value="SCAN ME" maxlength="26" oninput="triggerQrUpdate()" class="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold tracking-wider" />
+                </div>
+                <div class="flex items-center gap-2 pt-3">
+                  <input type="color" id="qr-frame-color" value="#4f46e5" oninput="triggerQrUpdate()" class="w-8 h-8 rounded cursor-pointer" />
+                  <span class="text-xs">Frame Color</span>
+                </div>
+                <div class="flex items-center gap-2 pt-3">
+                  <input type="color" id="qr-frame-text-color" value="#ffffff" oninput="triggerQrUpdate()" class="w-8 h-8 rounded cursor-pointer" />
+                  <span class="text-xs">Label Color</span>
+                </div>
+              </div>
+
+              <!-- Dimensions, Quiet Zone & Error Correction -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Export Resolution: <span id="qr-size-val">400px</span></label>
+                  <input type="range" id="qr-size" min="200" max="1000" step="20" value="400" oninput="document.getElementById('qr-size-val').textContent=this.value+'px';triggerQrUpdate()" class="w-full accent-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Quiet Zone Margin: <span id="qr-margin-val">16px</span></label>
+                  <input type="range" id="qr-margin" min="0" max="50" step="2" value="16" oninput="document.getElementById('qr-margin-val').textContent=this.value+'px';triggerQrUpdate()" class="w-full accent-brand-500" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-500 mb-1">Error Correction</label>
+                  <select id="qr-ecc" onchange="triggerQrUpdate()" class="w-full px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                    <option value="L">Low (L — ~7%)</option>
+                    <option value="M">Medium (M — ~15%)</option>
+                    <option value="Q" selected>Quartile (Q — ~25%)</option>
+                    <option value="H">High (H — ~30% Best for Logos)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+          </section>
+        </div>
+
+        <!-- ==========================================
+             PANEL B: 1D BARCODE GENERATOR CONTROLS
+             ========================================== -->
+        <div id="barcode-controls-panel" class="hidden space-y-6">
+
+          <!-- Step 1: Symbology & Value -->
+          <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center">1</span>
+                Select Barcode Symbology &amp; Payload
+              </h2>
+              <button onclick="insertBarcodeSample()" class="px-3 py-1 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 text-xs font-semibold transition flex items-center gap-1.5">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>Insert Valid Sample</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Barcode Format (20 Symbologies)</label>
+                <select id="bc-format" onchange="onBarcodeFormatChange()" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                  <optgroup label="Code 128 (Alphanumeric & High Density)">
+                    <option value="CODE128" selected>CODE128 (Auto Mode)</option>
+                    <option value="CODE128A">CODE128A (ASCII + Control)</option>
+                    <option value="CODE128B">CODE128B (Standard ASCII)</option>
+                    <option value="CODE128C">CODE128C (Numeric Pairs)</option>
+                  </optgroup>
+                  <optgroup label="Retail & Point-of-Sale (EAN / UPC)">
+                    <option value="EAN13">EAN-13 (12 or 13 Digits)</option>
+                    <option value="EAN8">EAN-8 (7 or 8 Digits)</option>
+                    <option value="EAN5">EAN-5 (5-Digit Supplement)</option>
+                    <option value="EAN2">EAN-2 (2-Digit Supplement)</option>
+                    <option value="UPC">UPC-A (11 or 12 Digits)</option>
+                    <option value="UPCE">UPC-E (6 or 8 Digits)</option>
+                  </optgroup>
+                  <optgroup label="Logistics, Industrial & Healthcare">
+                    <option value="CODE39">CODE39 (Uppercase, Digits, - . $ / + %)</option>
+                    <option value="ITF14">ITF-14 (13 or 14 Digits Shipping)</option>
+                    <option value="ITF">ITF (Interleaved 2 of 5 - Even Digits)</option>
+                    <option value="codabar">Codabar (Libraries & Blood Banks)</option>
+                    <option value="pharmacode">Pharmacode (Integer 3 to 131070)</option>
+                  </optgroup>
+                  <optgroup label="Inventory (MSI Plessey)">
+                    <option value="MSI">MSI (Numeric)</option>
+                    <option value="MSI10">MSI10 (Mod 10 Check)</option>
+                    <option value="MSI11">MSI11 (Mod 11 Check)</option>
+                    <option value="MSI1010">MSI1010 (Double Mod 10)</option>
+                    <option value="MSI1110">MSI1110 (Mod 11 + Mod 10)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Barcode Data Value</label>
+                <div class="relative">
+                  <input type="text" id="bc-value" value="STUDIO-2025" oninput="renderBarcode()" placeholder="Enter barcode data..." class="w-full pl-3.5 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-mono focus:ring-2 focus:ring-brand-500 focus:outline-none" />
+                  <button onclick="randomizeBarcodeSample()" title="Generate Random Valid Value" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-500 transition">
+                    <i class="fa-solid fa-dice"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Format Requirement Helper Box -->
+            <div id="bc-helper-box" class="p-3 rounded-xl bg-slate-100/80 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-2.5 text-xs">
+              <i class="fa-solid fa-circle-info text-brand-500 mt-0.5"></i>
+              <div class="flex-1">
+                <span class="font-semibold text-slate-700 dark:text-slate-200" id="bc-rule-title">CODE128 (Auto):</span>
+                <span class="text-slate-600 dark:text-slate-400 ml-1" id="bc-rule-desc">Supports any ASCII character (letters, numbers, symbols) of any length.</span>
+              </div>
+            </div>
+
+            <!-- Validation Error Alert (Hidden when valid) -->
+            <div id="bc-error-box" class="hidden p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span id="bc-error-msg">Invalid value for selected symbology.</span>
+              </div>
+              <button onclick="insertBarcodeSample()" class="px-2.5 py-1 rounded-lg bg-rose-500 text-white font-semibold shrink-0">Fix with Sample</button>
+            </div>
+          </section>
+
+          <!-- Step 2: Barcode Appearance & Typography -->
+          <section class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-5">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-brand-500 text-white text-xs flex items-center justify-center">2</span>
+                Customize Bars, Colors &amp; Label
+              </h2>
+              <button onclick="resetBarcodeStyle()" class="text-xs text-slate-400 hover:text-brand-500 flex items-center gap-1 transition">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+              </button>
+            </div>
+
+            <!-- Colors -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+              <div class="flex items-center gap-2.5">
+                <input type="color" id="bc-line-color" value="#0f172a" oninput="renderBarcode()" class="w-9 h-9 rounded-lg cursor-pointer" />
+                <div>
+                  <div class="text-xs font-semibold">Bar &amp; Text Color</div>
+                  <div class="text-[11px] text-slate-400">High contrast dark</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2.5">
+                <input type="color" id="bc-bg-color" value="#ffffff" oninput="renderBarcode()" class="w-9 h-9 rounded-lg cursor-pointer" />
+                <div>
+                  <div class="text-xs font-semibold">Background</div>
+                  <div class="text-[11px] text-slate-400">Light quiet zone</div>
+                </div>
+              </div>
+              <div class="flex items-center">
+                <label class="inline-flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <input type="checkbox" id="bc-bg-transparent" onchange="renderBarcode()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                  <span>Transparent Background</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Dimensions Sliders -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Bar Width: <span id="bc-width-val">2px</span></label>
+                <input type="range" id="bc-width" min="1" max="4" step="0.5" value="2" oninput="document.getElementById('bc-width-val').textContent=this.value+'px';renderBarcode()" class="w-full accent-brand-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Bar Height: <span id="bc-height-val">100px</span></label>
+                <input type="range" id="bc-height" min="30" max="180" step="5" value="100" oninput="document.getElementById('bc-height-val').textContent=this.value+'px';renderBarcode()" class="w-full accent-brand-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 mb-1">Quiet Margin: <span id="bc-margin-val">16px</span></label>
+                <input type="range" id="bc-margin" min="0" max="40" step="2" value="16" oninput="document.getElementById('bc-margin-val').textContent=this.value+'px';renderBarcode()" class="w-full accent-brand-500" />
+              </div>
+            </div>
+
+            <!-- Human Readable Text Controls -->
+            <div class="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <label class="inline-flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                  <input type="checkbox" id="bc-display-value" checked onchange="renderBarcode()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4" />
+                  <span>Show Human-Readable Text Label</span>
+                </label>
+                <input type="text" id="bc-text-override" oninput="renderBarcode()" placeholder="Optional custom display label override..." class="px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs w-64" />
+              </div>
+
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Text Position</label>
+                  <select id="bc-text-pos" onchange="renderBarcode()" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    <option value="bottom">Bottom</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Text Alignment</label>
+                  <select id="bc-text-align" onchange="renderBarcode()" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    <option value="center">Center</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Font Family</label>
+                  <select id="bc-font" onchange="renderBarcode()" class="w-full px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    <option value="JetBrains Mono, monospace">Monospace</option>
+                    <option value="Inter, sans-serif">Sans-Serif</option>
+                    <option value="Georgia, serif">Serif</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-500 mb-1">Font Size: <span id="bc-fontsize-val">18px</span></label>
+                  <input type="range" id="bc-fontsize" min="10" max="30" value="18" oninput="document.getElementById('bc-fontsize-val').textContent=this.value+'px';renderBarcode()" class="w-full accent-brand-500 mt-1.5" />
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: LIVE PREVIEW, SELF-TEST & EXPORT STUDIO (5 Cols) -->
+      <div class="lg:col-span-5 lg:sticky lg:top-22 space-y-5">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm flex flex-col">
+          
+          <!-- Preview Header + Contrast Badge -->
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400" id="preview-mode-title">Live QR Code Preview</h3>
+            </div>
+            <div id="scannability-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>High Scannability</span>
+            </div>
+          </div>
+
+          <!-- Canvas Stage Container -->
+          <div class="checkerboard-bg rounded-2xl border border-slate-200/70 dark:border-slate-800 p-6 flex items-center justify-center min-h-[320px] relative overflow-hidden">
+            <!-- QR Code Stage -->
+            <div id="qr-preview-stage" class="flex flex-col items-center justify-center transition-all duration-200">
+              <!-- Hidden raw qr-code-styling mount point -->
+              <div id="qr-raw-mount" class="hidden"></div>
+              <!-- Final composite canvas (includes QR + optional decorative frame) -->
+              <canvas id="qr-composite-canvas" class="max-w-full h-auto rounded-xl shadow-md"></canvas>
+            </div>
+
+            <!-- 1D Barcode Stage -->
+            <div id="barcode-preview-stage" class="hidden flex-col items-center justify-center w-full overflow-x-auto">
+              <canvas id="barcode-canvas" class="max-w-full h-auto rounded-lg shadow-sm"></canvas>
+              <svg id="barcode-svg" class="hidden"></svg>
+            </div>
+          </div>
+
+          <!-- Encoded Payload Preview Bar -->
+          <div class="mt-4 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-2">
+            <div class="truncate text-xs font-mono text-slate-600 dark:text-slate-300 flex-1" id="live-payload-summary">
+              https://example.com
+            </div>
+            <button onclick="copyCurrentPayload()" class="px-2 py-1 rounded-lg bg-slate-200/70 dark:bg-slate-700 hover:bg-brand-500 hover:text-white text-[11px] font-medium transition shrink-0">
+              <i class="fa-regular fa-copy mr-1"></i>Copy Data
+            </button>
+          </div>
+
+          <!-- Primary Export Buttons -->
+          <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button onclick="exportCurrentCode('png')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm shadow-brand-500/20 transition">
+              <i class="fa-solid fa-download"></i>
+              <span>PNG</span>
+            </button>
+            <button onclick="exportCurrentCode('svg')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold transition">
+              <i class="fa-solid fa-bezier-curve text-brand-500"></i>
+              <span>SVG</span>
+            </button>
+            <button onclick="exportCurrentCode('jpeg')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold transition">
+              <i class="fa-regular fa-file-image text-amber-500"></i>
+              <span>JPG</span>
+            </button>
+            <button onclick="exportCurrentCode('webp')" class="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold transition">
+              <i class="fa-solid fa-bolt text-emerald-500"></i>
+              <span>WEBP</span>
+            </button>
+          </div>
+
+          <!-- Secondary Actions: Copy Image, Save to History, Test in Scanner -->
+          <div class="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <button onclick="copyCodeImageToClipboard()" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 text-xs font-medium transition">
+              <i class="fa-regular fa-clipboard text-brand-500"></i>
+              <span>Copy Image</span>
+            </button>
+            <button onclick="saveCurrentToHistory()" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-500 text-xs font-medium transition">
+              <i class="fa-regular fa-bookmark text-amber-500"></i>
+              <span>Save History</span>
+            </button>
+            <button onclick="scanCurrentlyGeneratedCode()" class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-semibold transition">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              <span>Test Scan Code</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==========================================
+         VIEW 3: SCANNER & READER WORKSPACE (CAMERA + PHOTO)
+         ========================================== -->
+    <div id="scanner-workspace" class="hidden grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN: CAMERA & IMAGE UPLOAD SCANNER (7 Cols) -->
+      <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-5">
+        
+        <!-- Scanner Mode Switcher (Camera vs Photo File) -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700">
+            <button onclick="switchScannerSource('camera')" id="scan-src-camera" class="px-4 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-video"></i>
+              <span>Live Camera</span>
+            </button>
+            <button onclick="switchScannerSource('file')" id="scan-src-file" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2 transition">
+              <i class="fa-solid fa-file-image"></i>
+              <span>Scan Photo / Image</span>
+            </button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Audio Beep Toggle -->
+            <label class="inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+              <input type="checkbox" id="scan-beep-toggle" checked class="rounded text-brand-600 focus:ring-brand-500" />
+              <i class="fa-solid fa-volume-high text-brand-500"></i>
+              <span>Beep</span>
+            </label>
+            <!-- Quick Test Current Generated Code Button -->
+            <button onclick="scanCurrentlyGeneratedCode()" class="px-3 py-1.5 rounded-lg bg-brand-500/10 hover:bg-brand-500/20 text-brand-600 dark:text-brand-400 text-xs font-semibold transition flex items-center gap-1.5">
+              <i class="fa-solid fa-bolt"></i>
+              <span>Scan Generated Code</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- CAMERA SCANNER PANEL -->
+        <div id="scanner-camera-panel" class="space-y-4">
+          <!-- Camera Controls Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800">
+            <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+              <i class="fa-solid fa-camera text-slate-400 text-sm"></i>
+              <select id="camera-select" onchange="onCameraDeviceChange()" class="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+                <option value="">Default Camera (Auto Front/Back)</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="toggleCameraScanner()" id="camera-start-btn" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-play"></i>
+                <span>Start Camera</span>
+              </button>
+              <button onclick="toggleMirrorCamera()" title="Mirror Camera Preview" class="p-2 rounded-xl bg-slate-200/70 dark:bg-slate-700 hover:bg-slate-300 text-xs transition">
+                <i class="fa-solid fa-arrows-left-right"></i>
+              </button>
+              <button onclick="toggleCameraTorch()" id="camera-torch-btn" title="Toggle Flashlight / Torch" class="hidden p-2 rounded-xl bg-amber-500/20 text-amber-500 text-xs transition">
+                <i class="fa-solid fa-bolt-lightning"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Camera Viewport -->
+          <div class="relative rounded-2xl bg-slate-950 border border-slate-800 min-h-[340px] flex flex-col items-center justify-center overflow-hidden">
+            <!-- Animated Laser Line when active -->
+            <div id="camera-laser" class="laser-line hidden"></div>
+            
+            <!-- HTML5-QRCode Mount Container -->
+            <div id="camera-reader" class="w-full max-w-lg"></div>
+
+            <!-- Placeholder when camera is stopped -->
+            <div id="camera-idle-placeholder" class="text-center p-8 space-y-3">
+              <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-brand-400">
+                <i class="fa-solid fa-camera-viewfinder text-2xl"></i>
+              </div>
+              <div class="space-y-1">
+                <h4 class="text-sm font-semibold text-white">Live Camera Multi-Format Scanner</h4>
+                <p class="text-xs text-slate-400 max-w-xs mx-auto">
+                  Scans QR Codes, EAN-13, EAN-8, UPC, CODE128, CODE39, ITF, and DataMatrix directly in your browser.
+                </p>
+              </div>
+              <button onclick="toggleCameraScanner()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-600/30 transition inline-flex items-center gap-2">
+                <i class="fa-solid fa-video"></i>
+                <span>Launch Camera</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PHOTO / IMAGE FILE SCANNER PANEL -->
+        <div id="scanner-file-panel" class="hidden space-y-4">
+          <!-- Drag & Drop Zone -->
+          <div id="scan-dropzone" onclick="document.getElementById('scan-file-input').click()" ondragover="handleScanDragOver(event)" ondragleave="handleScanDragLeave(event)" ondrop="handleScanFileDrop(event)" class="cursor-pointer rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-400 bg-slate-50/70 dark:bg-slate-800/40 p-8 text-center transition-all">
+            <input type="file" id="scan-file-input" accept="image/*" onchange="handleScanFileSelect(event)" class="hidden" />
+            <div class="w-14 h-14 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center mx-auto mb-3">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl"></i>
+            </div>
+            <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100">Drop an image here, click to browse, or press Ctrl+V to paste</h4>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Supports PNG, JPG, WEBP screenshots or photos of any QR Code or 1D Barcode
+            </p>
+          </div>
+
+          <!-- Uploaded Image Preview & Multi-Pass Status -->
+          <div id="scan-image-preview-card" class="hidden p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center gap-4">
+            <img id="scan-uploaded-img" src="https://placehold.co/120x120/1e293b/ffffff?text=Preview" alt="Uploaded scan target" class="w-28 h-28 object-contain rounded-lg bg-white p-1.5 border border-slate-200" />
+            <div class="flex-1 space-y-1.5 text-center sm:text-left">
+              <div class="text-xs font-bold uppercase tracking-wider text-brand-500" id="scan-file-status">Scanning image...</div>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                Multi-pass client-side decoder automatically tests normal, padded quiet-zone, and high-contrast threshold passes.
+              </p>
+            </div>
+          </div>
+          <!-- Hidden helper mount for html5-qrcode file scanning -->
+          <div id="file-scanner-mount" class="hidden"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: INTELLIGENT SCAN RESULT INSPECTOR (5 Cols) -->
+      <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+            <i class="fa-solid fa-bolt text-brand-500"></i>
+            <span>Decoded Scan Result</span>
+          </h3>
+          <span id="scan-result-format-badge" class="hidden px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-brand-500/15 text-brand-600 dark:text-brand-300 border border-brand-500/30">
+            QR_CODE
+          </span>
+        </div>
+
+        <!-- Empty State before first scan -->
+        <div id="scan-result-empty" class="py-14 text-center space-y-2 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+          <i class="fa-solid fa-qrcode text-3xl text-slate-300 dark:text-slate-700"></i>
+          <p class="text-xs font-medium text-slate-500 dark:text-slate-400">No code scanned yet</p>
+          <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
+            Point your camera at a code, drop an image file, or click <strong>"Scan Generated Code"</strong> to test immediately.
+          </p>
+        </div>
+
+        <!-- Active Result Details -->
+        <div id="scan-result-content" class="hidden space-y-4">
+          <!-- Structured Parsed Card (Wi-Fi, vCard, URL, etc.) -->
+          <div id="scan-structured-card" class="p-3.5 rounded-xl bg-brand-500/5 border border-brand-500/20 space-y-2"></div>
+
+          <!-- Raw Payload Box -->
+          <div>
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>Raw Decoded Payload</span>
+              <span id="scan-result-time" class="font-mono">Just now</span>
+            </div>
+            <textarea id="scan-raw-textarea" readonly rows="4" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-800 dark:text-slate-100 focus:outline-none"></textarea>
+          </div>
+
+          <!-- Action Buttons on Scanned Result -->
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="copyScannedText()" class="py-2.5 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-regular fa-copy"></i>
+              <span>Copy Decoded Text</span>
+            </button>
+            <button onclick="loadScannedIntoGenerator()" class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-pen-to-square text-brand-500"></i>
+              <span>Edit in Generator</span>
+            </button>
+          </div>
+          <a id="scan-open-link-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+            <span>Open Detected Link</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==========================================
+         VIEW 4: SAVED HISTORY WORKSPACE
+         ========================================== -->
+    <div id="history-workspace" class="hidden space-y-5">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+          <div>
+            <h2 class="text-base font-bold">Saved &amp; Scanned History</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Stored locally in your browser's localStorage — private and offline-ready.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" id="history-search" oninput="renderHistoryList()" placeholder="Filter history..." class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs" />
+            <button onclick="clearAllHistory()" class="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold transition">
+              <i class="fa-solid fa-trash-can mr-1"></i>Clear All
+            </button>
+          </div>
+        </div>
+
+        <div id="history-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ==========================================
+       MODAL: BATCH PRINT LABEL SHEET
+       ========================================== -->
+  <div id="print-modal" class="fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-print text-brand-500"></i>
+          <h3 class="font-bold text-sm">Batch Print Label Sheet</h3>
+        </div>
+        <button onclick="closePrintModal()" class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Controls -->
+      <div class="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Number of Copies</label>
+          <input type="number" id="print-copies" value="12" min="1" max="60" oninput="updatePrintSheetPreview()" class="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Grid Columns</label>
+          <select id="print-cols" onchange="updatePrintSheetPreview()" class="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+            <option value="2">2 Columns (Large)</option>
+            <option value="3" selected>3 Columns (Medium)</option>
+            <option value="4">4 Columns (Compact)</option>
+            <option value="5">5 Columns (Small Stickers)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">Optional Caption Underneath</label>
+          <input type="text" id="print-caption" value="" placeholder="e.g. Price $19.99 / Scan Wi-Fi" oninput="updatePrintSheetPreview()" class="w-full px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs" />
+        </div>
+        <button onclick="window.print()" class="py-2 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm flex items-center justify-center gap-2">
+          <i class="fa-solid fa-print"></i>
+          <span>Print Now</span>
+        </button>
+      </div>
+
+      <!-- Printable Sheet Area -->
+      <div class="flex-1 overflow-y-auto p-6 bg-slate-100 dark:bg-slate-950">
+        <div id="print-area-container" class="bg-white text-slate-900 p-6 rounded-xl shadow-sm mx-auto max-w-3xl">
+          <div id="print-grid" class="grid grid-cols-3 gap-4"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       APPLICATION JAVASCRIPT ENGINE
+       ========================================== -->
+  <script>
+    /**************************************************************
+     * GLOBAL STATE & CONFIGURATION
+     **************************************************************/
+    const appState = {
+      activeTab: 'qr', // 'qr' | 'barcode' | 'scanner' | 'history'
+      qr: {
+        dataType: 'url',
+        dotType: 'square',
+        cornerSquareType: 'square',
+        cornerDotType: 'square',
+        colorMode: 'solid', // 'solid' | 'gradient'
+        dotColor1: '#0f172a',
+        gradColor1: '#4f46e5',
+        gradColor2: '#ec4899',
+        gradType: 'linear',
+        gradRotation: 45,
+        customEyeColor: false,
+        eyeFrameColor: '#4f46e5',
+        eyeBallColor: '#ec4899',
+        bgColor: '#ffffff',
+        bgTransparent: false,
+        logoDataUrl: null,
+        logoSize: 0.35,
+        logoMargin: 6,
+        logoHideDots: true,
+        frameStyle: 'none', // 'none' | 'bottom-banner' | 'top-banner' | 'card-badge'
+        frameText: 'SCAN ME',
+        frameColor: '#4f46e5',
+        frameTextColor: '#ffffff',
+        size: 400,
+        margin: 16,
+        ecc: 'Q'
+      },
+      scanner: {
+        source: 'camera', // 'camera' | 'file'
+        html5QrCode: null,
+        isScanning: false,
+        isMirrored: true,
+        torchOn: false,
+        lastDecodedText: '',
+        lastDecodedFormat: ''
+      },
+      history: []
+    };
+
+    // Barcode Format Definitions, Validation Rules & Valid Samples
+    const BARCODE_SPECS = {
+      CODE128:  { title: 'CODE128 (Auto)', desc: 'Full ASCII character set. Automatically switches between A, B, and C modes.', sample: 'STUDIO-2025', regex: /^[\x00-\x7F]+$/ },
+      CODE128A: { title: 'CODE128A', desc: 'Uppercase letters, numbers, standard punctuation, and ASCII control codes.', sample: 'WAREHOUSE-01', regex: /^[\x00-\x5F]+$/ },
+      CODE128B: { title: 'CODE128B', desc: 'Uppercase & lowercase letters, numbers, and standard ASCII symbols.', sample: 'Item-9842-Pro', regex: /^[\x20-\x7F]+$/ },
+      CODE128C: { title: 'CODE128C', desc: 'Requires an EVEN number of numeric digits only (0-9). High density.', sample: '123456789012', regex: /^(\d{2})+$/ },
+      EAN13:    { title: 'EAN-13', desc: 'Requires 12 numeric digits (13th check digit is auto-calculated or verified).', sample: '590123412345', regex: /^\d{12,13}$/ },
+      EAN8:     { title: 'EAN-8', desc: 'Requires 7 numeric digits (8th check digit is auto-calculated or verified).', sample: '9638507', regex: /^\d{7,8}$/ },
+      EAN5:     { title: 'EAN-5 Supplement', desc: 'Requires exactly 5 numeric digits (often used for book prices).', sample: '52495', regex: /^\d{5}$/ },
+      EAN2:     { title: 'EAN-2 Supplement', desc: 'Requires exactly 2 numeric digits (magazine issue numbers).', sample: '05', regex: /^\d{2}$/ },
+      UPC:      { title: 'UPC-A', desc: 'Requires 11 numeric digits (12th check digit is auto-calculated or verified).', sample: '12345678999', regex: /^\d{11,12}$/ },
+      UPCE:     { title: 'UPC-E', desc: 'Requires 6 numeric digits (or 8 digits starting with 0 or 1).', sample: '123456', regex: /^\d{6,8}$/ },
+      CODE39:   { title: 'CODE 39', desc: 'Uppercase letters (A-Z), digits (0-9), space, and symbols (- . $ / + %).', sample: 'CODE-39-OK', regex: /^[0-9A-Z\-\.\ \$\/\+\%]+$/ },
+      ITF14:    { title: 'ITF-14', desc: 'Requires 13 numeric digits (14th check digit auto-calculated).', sample: '1001234567890', regex: /^\d{13,14}$/ },
+      ITF:      { title: 'ITF (Interleaved 2 of 5)', desc: 'Requires an EVEN number of numeric digits (0-9).', sample: '1234567890', regex: /^(\d{2})+$/ },
+      MSI:      { title: 'MSI Plessey', desc: 'Numeric digits only (0-9) of any length.', sample: '8045291', regex: /^\d+$/ },
+      MSI10:    { title: 'MSI10', desc: 'Numeric digits only (0-9) with automatic Modulo 10 check digit.', sample: '8045291', regex: /^\d+$/ },
+      MSI11:    { title: 'MSI11', desc: 'Numeric digits only (0-9) with automatic Modulo 11 check digit.', sample: '8045291', regex: /^\d+$/ },
+      MSI1010:  { title: 'MSI1010', desc: 'Numeric digits only (0-9) with double Modulo 10 check digits.', sample: '8045291', regex: /^\d+$/ },
+      MSI1110:  { title: 'MSI1110', desc: 'Numeric digits only (0-9) with Modulo 11 + Modulo 10 check digits.', sample: '8045291', regex: /^\d+$/ },
+      pharmacode: { title: 'Pharmacode', desc: 'Single integer number between 3 and 131070 used in pharmaceutical packaging.', sample: '12345', regex: /^\d+$/ },
+      codabar:  { title: 'Codabar', desc: 'Digits (0-9) and (- $ : / . +), automatically wrapped with start/stop A-D.', sample: 'A40156B', regex: /^[A-Da-d]?[0-9\-\$\:\/\.\+]+[A-Da-d]?$/ }
+    };
+
+    // Instance of QRCodeStyling
+    let qrStylingInstance = null;
+    let qrUpdateTimer = null;
+
+    /**************************************************************
+     * INITIALIZATION
+     **************************************************************/
+    window.addEventListener('DOMContentLoaded', () => {
+      loadHistoryFromStorage();
+      initQrCodeEngine();
+      renderBarcode();
+      updateButtonActiveStates();
+
+      // Global paste listener for Photo Scanner
+      window.addEventListener('paste', (e) => {
+        if (appState.activeTab !== 'scanner') return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+          if (item.type.indexOf('image') !== -1) {
+            const file = item.getAsFile();
+            if (file) {
+              switchScannerSource('file');
+              processUploadedScanFile(file);
+            }
+          }
+        }
+      });
+    });
+
+    /**************************************************************
+     * THEME & NAVIGATION
+     **************************************************************/
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    function switchMainTab(tab) {
+      // Stop live camera if navigating away from scanner
+      if (appState.activeTab === 'scanner' && tab !== 'scanner' && appState.scanner.isScanning) {
+        stopCameraScanner();
+      }
+
+      appState.activeTab = tab;
+
+      // Update Top Nav Button Styles
+      document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.className = 'main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white relative';
+      });
+      const activeBtn = document.getElementById(`main-tab-${tab}`);
+      if (activeBtn) {
+        activeBtn.className = 'main-tab-btn flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm relative';
+      }
+
+      const genWorkspace = document.getElementById('generator-workspace');
+      const scanWorkspace = document.getElementById('scanner-workspace');
+      const histWorkspace = document.getElementById('history-workspace');
+
+      const qrControls = document.getElementById('qr-controls-panel');
+      const bcControls = document.getElementById('barcode-controls-panel');
+      const qrStage = document.getElementById('qr-preview-stage');
+      const bcStage = document.getElementById('barcode-preview-stage');
+      const previewTitle = document.getElementById('preview-mode-title');
+
+      genWorkspace.classList.add('hidden');
+      scanWorkspace.classList.add('hidden');
+      scanWorkspace.classList.remove('grid');
+      histWorkspace.classList.add('hidden');
+
+      if (tab === 'qr') {
+        genWorkspace.classList.remove('hidden');
+        qrControls.classList.remove('hidden');
+        bcControls.classList.add('hidden');
+        qrStage.classList.remove('hidden');
+        bcStage.classList.add('hidden');
+        previewTitle.textContent = 'Live QR Code Preview';
+        triggerQrUpdate();
+      } else if (tab === 'barcode') {
+        genWorkspace.classList.remove('hidden');
+        qrControls.classList.add('hidden');
+        bcControls.classList.remove('hidden');
+        qrStage.classList.add('hidden');
+        bcStage.classList.remove('hidden');
+        bcStage.classList.add('flex');
+        previewTitle.textContent = 'Live 1D Barcode Preview';
+        renderBarcode();
+      } else if (tab === 'scanner') {
+        scanWorkspace.classList.remove('hidden');
+        scanWorkspace.classList.add('grid');
+        populateCameraDevices();
+      } else if (tab === 'history') {
+        histWorkspace.classList.remove('hidden');
+        renderHistoryList();
+      }
+    }
+
+    /**************************************************************
+     * QR CODE DATA PAYLOAD BUILDER (ALL 11 TYPES)
+     **************************************************************/
+    function setQrDataType(type) {
+      appState.qr.dataType = type;
+      document.querySelectorAll('.qr-data-form').forEach(el => el.classList.add('hidden'));
+      const targetForm = document.getElementById(`qr-form-${type}`);
+      if (targetForm) targetForm.classList.remove('hidden');
+      updateButtonActiveStates();
+      triggerQrUpdate();
+    }
+
+    function setUrlPrefix(prefix) {
+      const input = document.getElementById('qr-url-input');
+      let val = input.value.trim().replace(/^https?:\/\//i, '');
+      input.value = prefix + val;
+      triggerQrUpdate();
+    }
+
+    function buildQrPayloadString() {
+      const t = appState.qr.dataType;
+      if (t === 'url') {
+        return document.getElementById('qr-url-input').value.trim() || 'https://example.com';
+      }
+      if (t === 'text') {
+        return document.getElementById('qr-text-input').value || ' ';
+      }
+      if (t === 'wifi') {
+        const ssid = escapeWifiField(document.getElementById('qr-wifi-ssid').value);
+        const pass = escapeWifiField(document.getElementById('qr-wifi-pass').value);
+        const enc = document.getElementById('qr-wifi-type').value;
+        const hidden = document.getElementById('qr-wifi-hidden').checked ? 'true' : 'false';
+        return `WIFI:T:${enc};S:${ssid};P:${pass};H:${hidden};;`;
+      }
+      if (t === 'vcard') {
+        const fn = document.getElementById('qr-vcard-fn').value.trim();
+        const ln = document.getElementById('qr-vcard-ln').value.trim();
+        const tel = document.getElementById('qr-vcard-tel').value.trim();
+        const email = document.getElementById('qr-vcard-email').value.trim();
+        const org = document.getElementById('qr-vcard-org').value.trim();
+        const title = document.getElementById('qr-vcard-title').value.trim();
+        const url = document.getElementById('qr-vcard-url').value.trim();
+        const adr = document.getElementById('qr-vcard-adr').value.trim();
+        return [
+          'BEGIN:VCARD',
+          'VERSION:3.0',
+          `N:${ln};${fn};;;`,
+          `FN:${fn} ${ln}`.trim(),
+          org ? `ORG:${org}` : '',
+          title ? `TITLE:${title}` : '',
+          tel ? `TEL;TYPE=CELL:${tel}` : '',
+          email ? `EMAIL:${email}` : '',
+          url ? `URL:${url}` : '',
+          adr ? `ADR;TYPE=WORK:;;${adr};;;;` : '',
+          'END:VCARD'
+        ].filter(Boolean).join('\n');
+      }
+      if (t === 'email') {
+        const to = document.getElementById('qr-email-to').value.trim();
+        const sub = encodeURIComponent(document.getElementById('qr-email-sub').value.trim());
+        const body = encodeURIComponent(document.getElementById('qr-email-body').value.trim());
+        return `mailto:${to}?subject=${sub}&body=${body}`;
+      }
+      if (t === 'sms') {
+        const tel = document.getElementById('qr-sms-tel').value.trim();
+        const body = document.getElementById('qr-sms-body').value.trim();
+        return `SMSTO:${tel}:${body}`;
+      }
+      if (t === 'phone') {
+        const tel = document.getElementById('qr-phone-tel').value.trim();
+        return `tel:${tel}`;
+      }
+      if (t === 'whatsapp') {
+        const phone = document.getElementById('qr-wa-phone').value.replace(/[^\d]/g, '');
+        const msg = encodeURIComponent(document.getElementById('qr-wa-msg').value.trim());
+        return `https://wa.me/${phone}?text=${msg}`;
+      }
+      if (t === 'geo') {
+        const lat = document.getElementById('qr-geo-lat').value.trim() || '0';
+        const lng = document.getElementById('qr-geo-lng').value.trim() || '0';
+        const q = encodeURIComponent(document.getElementById('qr-geo-q').value.trim());
+        return q ? `geo:${lat},${lng}?q=${q}` : `geo:${lat},${lng}`;
+      }
+      if (t === 'event') {
+        const title = document.getElementById('qr-event-title').value.trim();
+        const start = formatIcalDate(document.getElementById('qr-event-start').value);
+        const end = formatIcalDate(document.getElementById('qr-event-end').value);
+        const loc = document.getElementById('qr-event-loc').value.trim();
+        const desc = document.getElementById('qr-event-desc').value.trim();
+        return [
+          'BEGIN:VEVENT',
+          `SUMMARY:${title}`,
+          start ? `DTSTART:${start}` : '',
+          end ? `DTEND:${end}` : '',
+          loc ? `LOCATION:${loc}` : '',
+          desc ? `DESCRIPTION:${desc}` : '',
+          'END:VEVENT'
+        ].filter(Boolean).join('\n');
+      }
+      if (t === 'crypto') {
+        const coin = document.getElementById('qr-crypto-coin').value;
+        const addr = document.getElementById('qr-crypto-addr').value.trim();
+        const amt = document.getElementById('qr-crypto-amt').value.trim();
+        const label = encodeURIComponent(document.getElementById('qr-crypto-label').value.trim());
+        const params = [];
+        if (amt) params.push(`amount=${amt}`);
+        if (label) params.push(`label=${label}`);
+        return `${coin}:${addr}${params.length ? '?' + params.join('&') : ''}`;
+      }
+      return 'https://example.com';
+    }
+
+    function escapeWifiField(str) {
+      return (str || '').replace(/([\\;,:])/g, '\\$1');
+    }
+
+    function formatIcalDate(dtLocal) {
+      if (!dtLocal) return '';
+      return dtLocal.replace(/[-:]/g, '') + '00';
+    }
+
+    /**************************************************************
+     * QR CODE STYLING & COMPOSITE FRAME ENGINE
+     **************************************************************/
+    function initQrCodeEngine() {
+      qrStylingInstance = new QRCodeStyling({
+        width: 400,
+        height: 400,
+        type: 'canvas',
+        data: 'https://example.com',
+        margin: 16,
+        qrOptions: {
+          errorCorrectionLevel: 'Q'
+        },
+        dotsOptions: {
+          color: '#0f172a',
+          type: 'square'
+        },
+        backgroundOptions: {
+          color: '#ffffff'
+        },
+        cornersSquareOptions: {
+          type: 'square',
+          color: '#0f172a'
+        },
+        cornersDotOptions: {
+          type: 'square',
+          color: '#0f172a'
+        },
+        imageOptions: {
+          crossOrigin: 'anonymous',
+          margin: 6,
+          imageSize: 0.35,
+          hideBackgroundDots: true
+        }
+      });
+
+      const mount = document.getElementById('qr-raw-mount');
+      mount.innerHTML = '';
+      qrStylingInstance.append(mount);
+      triggerQrUpdate();
+    }
+
+    function triggerQrUpdate() {
+      clearTimeout(qrUpdateTimer);
+      qrUpdateTimer = setTimeout(() => {
+        renderQrComposite();
+      }, 45);
+    }
+
+    async function renderQrComposite() {
+      if (!qrStylingInstance) return;
+
+      // Sync UI Values into State
+      const payload = buildQrPayloadString();
+      document.getElementById('qr-payload-length').textContent = `${payload.length} chars`;
+      if (appState.activeTab === 'qr') {
+        document.getElementById('live-payload-summary').textContent = payload.replace(/\n/g, ' ↵ ');
+      }
+
+      appState.qr.dotColor1 = document.getElementById('qr-dot-color-1').value;
+      appState.qr.gradColor1 = document.getElementById('qr-grad-color-1').value;
+      appState.qr.gradColor2 = document.getElementById('qr-grad-color-2').value;
+      appState.qr.gradType = document.getElementById('qr-grad-type').value;
+      appState.qr.gradRotation = parseInt(document.getElementById('qr-grad-rotation').value, 10) || 0;
+      appState.qr.customEyeColor = document.getElementById('qr-custom-eye-color').checked;
+      appState.qr.eyeFrameColor = document.getElementById('qr-eye-frame-color').value;
+      appState.qr.eyeBallColor = document.getElementById('qr-eye-ball-color').value;
+      appState.qr.bgColor = document.getElementById('qr-bg-color').value;
+      appState.qr.bgTransparent = document.getElementById('qr-bg-transparent').checked;
+      appState.qr.logoSize = parseFloat(document.getElementById('qr-logo-size').value) || 0.35;
+      appState.qr.logoMargin = parseInt(document.getElementById('qr-logo-margin').value, 10) || 0;
+      appState.qr.logoHideDots = document.getElementById('qr-logo-hide-dots').checked;
+      appState.qr.frameText = document.getElementById('qr-frame-text').value || 'SCAN ME';
+      appState.qr.frameColor = document.getElementById('qr-frame-color').value;
+      appState.qr.frameTextColor = document.getElementById('qr-frame-text-color').value;
+      appState.qr.size = parseInt(document.getElementById('qr-size').value, 10) || 400;
+      appState.qr.margin = parseInt(document.getElementById('qr-margin').value, 10) || 16;
+      appState.qr.ecc = document.getElementById('qr-ecc').value;
+
+      document.getElementById('qr-dot-color-1-hex').value = appState.qr.dotColor1;
+      document.getElementById('qr-grad-1-label').textContent = appState.qr.gradColor1;
+      document.getElementById('qr-grad-2-label').textContent = appState.qr.gradColor2;
+
+      // Evaluate contrast safety
+      checkScannabilityContrast();
+
+      // Build dotsOptions (Solid vs Gradient)
+      const dotsOptions = {
+        type: appState.qr.dotType
+      };
+      if (appState.qr.colorMode === 'gradient') {
+        dotsOptions.gradient = {
+          type: appState.qr.gradType,
+          rotation: (appState.qr.gradRotation * Math.PI) / 180,
+          colorStops: [
+            { offset: 0, color: appState.qr.gradColor1 },
+            { offset: 1, color: appState.qr.gradColor2 }
+          ]
+        };
+      } else {
+        dotsOptions.color = appState.qr.dotColor1;
+        dotsOptions.gradient = undefined;
+      }
+
+      // Build Corner Options
+      const primaryColor = appState.qr.colorMode === 'gradient' ? appState.qr.gradColor1 : appState.qr.dotColor1;
+      const secondaryColor = appState.qr.colorMode === 'gradient' ? appState.qr.gradColor2 : appState.qr.dotColor1;
+
+      const cornersSquareOptions = {
+        type: appState.qr.cornerSquareType,
+        color: appState.qr.customEyeColor ? appState.qr.eyeFrameColor : primaryColor
+      };
+      const cornersDotOptions = {
+        type: appState.qr.cornerDotType === 'dot' ? 'dot' : 'square',
+        color: appState.qr.customEyeColor ? appState.qr.eyeBallColor : secondaryColor
+      };
+
+      const backgroundOptions = {
+        color: appState.qr.bgTransparent ? 'transparent' : appState.qr.bgColor
+      };
+
+      qrStylingInstance.update({
+        width: appState.qr.size,
+        height: appState.qr.size,
+        data: payload,
+        margin: appState.qr.margin,
+        qrOptions: {
+          errorCorrectionLevel: appState.qr.ecc
+        },
+        dotsOptions,
+        cornersSquareOptions,
+        cornersDotOptions,
+        backgroundOptions,
+        image: appState.qr.logoDataUrl || undefined,
+        imageOptions: {
+          crossOrigin: 'anonymous',
+          margin: appState.qr.logoMargin,
+          imageSize: appState.qr.logoSize,
+          hideBackgroundDots: appState.qr.logoHideDots
+        }
+      });
+
+      // Wait for qr-code-styling internal canvas draw, then apply custom finder patterns & frame
+      if (qrStylingInstance._canvasDrawingPromise) {
+        try {
+          await qrStylingInstance._canvasDrawingPromise;
+        } catch (e) {}
+      }
+      setTimeout(() => {
+        drawQrWithDecorativeFrame();
+      }, 30);
+    }
+
+    /**
+     * Builds the canvas fillStyle (solid color or gradient) for QR elements
+     */
+    function getQrElementFillStyle(ctx, canvasSize, overrideColor) {
+      if (overrideColor) return overrideColor;
+      if (appState.qr.colorMode === 'gradient') {
+        const c1 = appState.qr.gradColor1;
+        const c2 = appState.qr.gradColor2;
+        if (appState.qr.gradType === 'radial') {
+          const half = canvasSize / 2;
+          const radGrad = ctx.createRadialGradient(half, half, 0, half, half, half * 1.1);
+          radGrad.addColorStop(0, c1);
+          radGrad.addColorStop(1, c2);
+          return radGrad;
+        } else {
+          const angle = (appState.qr.gradRotation * Math.PI) / 180;
+          const half = canvasSize / 2;
+          const len = canvasSize / 2;
+          const x1 = half - Math.cos(angle) * len;
+          const y1 = half - Math.sin(angle) * len;
+          const x2 = half + Math.cos(angle) * len;
+          const y2 = half + Math.sin(angle) * len;
+          const linGrad = ctx.createLinearGradient(x1, y1, x2, y2);
+          linGrad.addColorStop(0, c1);
+          linGrad.addColorStop(1, c2);
+          return linGrad;
+        }
+      }
+      return appState.qr.dotColor1;
+    }
+
+    /**
+     * Renders the "Rounded" (extra-rounded) 3x3 Inner Corner Eye Ball when selected,
+     * preserving native qr-code-styling rendering for all other shapes and outer frames.
+     */
+    function drawCustomFinderPatternsOnCanvas(targetCanvas) {
+      if (appState.qr.cornerDotType !== 'extra-rounded') return;
+      if (!qrStylingInstance || !qrStylingInstance._qr) return;
+      const count = qrStylingInstance._qr.getModuleCount();
+      if (!count) return;
+
+      const width = targetCanvas.width;
+      const height = targetCanvas.height;
+      const margin = appState.qr.margin;
+      const minSize = Math.min(width, height) - margin * 2;
+      const dotSize = Math.floor(minSize / count);
+      const xBeginning = Math.floor((width - count * dotSize) / 2);
+      const yBeginning = Math.floor((height - count * dotSize) / 2);
+
+      const ctx = targetCanvas.getContext('2d');
+      const ballSize = 3 * dotSize;
+
+      const ballFill = getQrElementFillStyle(
+        ctx,
+        width,
+        appState.qr.customEyeColor ? appState.qr.eyeBallColor : null
+      );
+
+      // Coordinates of the three Finder Pattern origins: Top-Left, Top-Right, Bottom-Left
+      const eyePositions = [
+        { x: xBeginning, y: yBeginning },
+        { x: xBeginning + (count - 7) * dotSize, y: yBeginning },
+        { x: xBeginning, y: yBeginning + (count - 7) * dotSize }
+      ];
+
+      eyePositions.forEach(({ x, y }) => {
+        const bx = x + 2 * dotSize;
+        const by = y + 2 * dotSize;
+
+        // Clear only the 3x3 inner eye ball region
+        ctx.clearRect(bx, by, ballSize, ballSize);
+        if (!appState.qr.bgTransparent) {
+          ctx.fillStyle = appState.qr.bgColor;
+          ctx.fillRect(bx, by, ballSize, ballSize);
+        }
+
+        // Draw rounded inner 3x3 eye ball
+        ctx.save();
+        ctx.fillStyle = ballFill;
+        roundRect(ctx, bx, by, ballSize, ballSize, ballSize * 0.34);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function drawQrWithDecorativeFrame() {
+      const rawMount = document.getElementById('qr-raw-mount');
+      const rawCanvas = rawMount.querySelector('canvas');
+      if (!rawCanvas) return;
+
+      // Render custom outer & inner corner eye shapes onto a working copy of rawCanvas
+      const styledQrCanvas = document.createElement('canvas');
+      styledQrCanvas.width = rawCanvas.width;
+      styledQrCanvas.height = rawCanvas.height;
+      styledQrCanvas.getContext('2d').drawImage(rawCanvas, 0, 0);
+      drawCustomFinderPatternsOnCanvas(styledQrCanvas);
+
+      const composite = document.getElementById('qr-composite-canvas');
+      const ctx = composite.getContext('2d');
+      const qrSize = styledQrCanvas.width;
+      const style = appState.qr.frameStyle;
+      const frameColor = appState.qr.frameColor;
+      const textColor = appState.qr.frameTextColor;
+      const label = (appState.qr.frameText || 'SCAN ME').toUpperCase();
+
+      if (style === 'none') {
+        composite.width = qrSize;
+        composite.height = qrSize;
+        ctx.clearRect(0, 0, composite.width, composite.height);
+        ctx.drawImage(styledQrCanvas, 0, 0);
+        return;
+      }
+
+      const bannerHeight = Math.round(qrSize * 0.16);
+      const pad = Math.round(qrSize * 0.04);
+
+      if (style === 'bottom-banner') {
+        composite.width = qrSize;
+        composite.height = qrSize + bannerHeight + pad;
+        ctx.clearRect(0, 0, composite.width, composite.height);
+        ctx.drawImage(styledQrCanvas, 0, 0);
+
+        // Draw Pill Banner at Bottom
+        ctx.fillStyle = frameColor;
+        roundRect(ctx, pad, qrSize + Math.round(pad * 0.3), qrSize - pad * 2, bannerHeight - Math.round(pad * 0.4), Math.round(bannerHeight * 0.4));
+        ctx.fill();
+
+        ctx.fillStyle = textColor;
+        ctx.font = `800 ${Math.round(bannerHeight * 0.46)}px Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, qrSize / 2, qrSize + bannerHeight / 2 + Math.round(pad * 0.1));
+      } else if (style === 'top-banner') {
+        composite.width = qrSize;
+        composite.height = qrSize + bannerHeight + pad;
+        ctx.clearRect(0, 0, composite.width, composite.height);
+
+        // Draw Top Header Pill
+        ctx.fillStyle = frameColor;
+        roundRect(ctx, pad, Math.round(pad * 0.3), qrSize - pad * 2, bannerHeight - Math.round(pad * 0.4), Math.round(bannerHeight * 0.4));
+        ctx.fill();
+
+        ctx.fillStyle = textColor;
+        ctx.font = `800 ${Math.round(bannerHeight * 0.46)}px Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, qrSize / 2, bannerHeight / 2 + Math.round(pad * 0.1));
+
+        ctx.drawImage(styledQrCanvas, 0, bannerHeight + pad);
+      } else if (style === 'card-badge') {
+        const border = Math.round(qrSize * 0.05);
+        composite.width = qrSize + border * 2;
+        composite.height = qrSize + border * 2 + bannerHeight;
+        ctx.clearRect(0, 0, composite.width, composite.height);
+
+        // Outer Card
+        ctx.fillStyle = frameColor;
+        roundRect(ctx, 0, 0, composite.width, composite.height, Math.round(qrSize * 0.07));
+        ctx.fill();
+
+        // Inner QR Container
+        ctx.fillStyle = appState.qr.bgTransparent ? '#ffffff' : appState.qr.bgColor;
+        roundRect(ctx, border, border, qrSize, qrSize, Math.round(qrSize * 0.04));
+        ctx.fill();
+
+        ctx.drawImage(styledQrCanvas, border, border);
+
+        // Bottom Card Label
+        ctx.fillStyle = textColor;
+        ctx.font = `800 ${Math.round(bannerHeight * 0.48)}px Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, composite.width / 2, qrSize + border * 1.4 + bannerHeight / 2);
+      }
+    }
+
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    function checkScannabilityContrast() {
+      const badge = document.getElementById('scannability-badge');
+      const fgHex = appState.qr.colorMode === 'gradient' ? appState.qr.gradColor1 : appState.qr.dotColor1;
+      const bgHex = appState.qr.bgTransparent ? '#ffffff' : appState.qr.bgColor;
+
+      const fgLum = getRelativeLuminance(fgHex);
+      const bgLum = getRelativeLuminance(bgHex);
+
+      if (fgLum >= bgLum) {
+        badge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1';
+        badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i><span>Inverted Contrast</span>';
+      } else if (bgLum - fgLum < 0.25) {
+        badge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1';
+        badge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>Low Contrast</span>';
+      } else {
+        badge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1';
+        badge.innerHTML = '<i class="fa-solid fa-check-circle"></i><span>High Scannability</span>';
+      }
+    }
+
+    function getRelativeLuminance(hex) {
+      const clean = hex.replace('#', '');
+      const r = parseInt(clean.substring(0, 2), 16) / 255;
+      const g = parseInt(clean.substring(2, 4), 16) / 255;
+      const b = parseInt(clean.substring(4, 6), 16) / 255;
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+
+    /**************************************************************
+     * QR CUSTOMIZATION UI HELPERS & PRESETS
+     **************************************************************/
+    function switchQrSubTab(sub) {
+      document.querySelectorAll('.qr-subpanel').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`qr-subpanel-${sub}`).classList.remove('hidden');
+
+      document.querySelectorAll('.qr-subtab-btn').forEach(b => {
+        b.className = 'qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 whitespace-nowrap';
+      });
+      document.getElementById(`qr-subtab-${sub}`).className = 'qr-subtab-btn px-3.5 py-2 text-xs font-semibold border-b-2 border-brand-500 text-brand-600 dark:text-brand-400 whitespace-nowrap';
+    }
+
+    function setQrDotType(type) {
+      appState.qr.dotType = type;
+      updateButtonActiveStates();
+      triggerQrUpdate();
+    }
+
+    function setQrCornerSquareType(type) {
+      appState.qr.cornerSquareType = type;
+      updateButtonActiveStates();
+      triggerQrUpdate();
+    }
+
+    function setQrCornerDotType(type) {
+      appState.qr.cornerDotType = type;
+      updateButtonActiveStates();
+      triggerQrUpdate();
+    }
+
+    function setQrFrameStyle(style) {
+      appState.qr.frameStyle = style;
+      const opts = document.getElementById('qr-frame-options');
+      if (style === 'none') {
+        opts.classList.add('hidden');
+      } else {
+        opts.classList.remove('hidden');
+      }
+      updateButtonActiveStates();
+      triggerQrUpdate();
+    }
+
+    function setQrColorMode(mode) {
+      appState.qr.colorMode = mode;
+      const solidRow = document.getElementById('qr-solid-color-row');
+      const gradRow = document.getElementById('qr-gradient-color-row');
+      const btnSolid = document.getElementById('qr-colormode-solid');
+      const btnGrad = document.getElementById('qr-colormode-gradient');
+
+      if (mode === 'solid') {
+        solidRow.classList.remove('hidden');
+        gradRow.classList.add('hidden');
+        btnSolid.className = 'px-2.5 py-1 rounded-md font-medium bg-white dark:bg-slate-800 shadow-sm';
+        btnGrad.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500';
+      } else {
+        solidRow.classList.add('hidden');
+        gradRow.classList.remove('hidden');
+        btnGrad.className = 'px-2.5 py-1 rounded-md font-medium bg-white dark:bg-slate-800 shadow-sm';
+        btnSolid.className = 'px-2.5 py-1 rounded-md font-medium text-slate-500';
+      }
+      triggerQrUpdate();
+    }
+
+    function toggleCustomEyeColors() {
+      const checked = document.getElementById('qr-custom-eye-color').checked;
+      const controls = document.getElementById('qr-eye-colors-controls');
+      if (checked) controls.classList.remove('hidden');
+      else controls.classList.add('hidden');
+      triggerQrUpdate();
+    }
+
+    function syncHexInput(colorId, hexValue) {
+      if (/^#[0-9A-Fa-f]{6}$/.test(hexValue)) {
+        document.getElementById(colorId).value = hexValue;
+        triggerQrUpdate();
+      }
+    }
+
+    function applyQrPreset(presetName) {
+      const presets = {
+        classic: { dot: 'square', csq: 'square', cdot: 'square', mode: 'solid', c1: '#0f172a', bg: '#ffffff' },
+        cyber:   { dot: 'extra-rounded', csq: 'extra-rounded', cdot: 'dot', mode: 'gradient', g1: '#4f46e5', g2: '#ec4899', bg: '#ffffff' },
+        ocean:   { dot: 'rounded', csq: 'extra-rounded', cdot: 'dot', mode: 'gradient', g1: '#1d4ed8', g2: '#06b6d4', bg: '#ffffff' },
+        emerald: { dot: 'classy-rounded', csq: 'extra-rounded', cdot: 'dot', mode: 'gradient', g1: '#047857', g2: '#14b8a6', bg: '#ffffff' },
+        sunset:  { dot: 'dots', csq: 'dot', cdot: 'dot', mode: 'gradient', g1: '#e11d48', g2: '#f97316', bg: '#ffffff' },
+        royal:   { dot: 'classy', csq: 'square', cdot: 'square', mode: 'gradient', g1: '#92400e', g2: '#d97706', bg: '#fffbeb' },
+        berry:   { dot: 'extra-rounded', csq: 'dot', cdot: 'dot', mode: 'gradient', g1: '#6d28d9', g2: '#d946ef', bg: '#ffffff' },
+        minimal: { dot: 'dots', csq: 'extra-rounded', cdot: 'dot', mode: 'solid', c1: '#334155', bg: '#f8fafc' }
+      };
+      const p = presets[presetName];
+      if (!p) return;
+
+      appState.qr.dotType = p.dot;
+      appState.qr.cornerSquareType = p.csq;
+      appState.qr.cornerDotType = p.cdot;
+      document.getElementById('qr-bg-color').value = p.bg;
+      document.getElementById('qr-bg-transparent').checked = false;
+
+      if (p.mode === 'gradient') {
+        document.getElementById('qr-grad-color-1').value = p.g1;
+        document.getElementById('qr-grad-color-2').value = p.g2;
+        setQrColorMode('gradient');
+      } else {
+        document.getElementById('qr-dot-color-1').value = p.c1;
+        setQrColorMode('solid');
+      }
+      updateButtonActiveStates();
+      triggerQrUpdate();
+      showToast(`Applied "${presetName}" style preset`, 'info');
+    }
+
+    function resetQrDesign() {
+      appState.qr.logoDataUrl = null;
+      setQrFrameStyle('none');
+      applyQrPreset('classic');
+    }
+
+    function updateButtonActiveStates() {
+      const activeClasses = ['border-brand-500', 'bg-brand-500/10', 'text-brand-600', 'dark:text-brand-400'];
+      const inactiveClasses = ['border-slate-200', 'dark:border-slate-800', 'text-slate-600', 'dark:text-slate-400'];
+
+      const styleGroup = (selector, attr, currentVal) => {
+        document.querySelectorAll(selector).forEach(btn => {
+          const val = btn.getAttribute(attr);
+          if (val === currentVal) {
+            btn.classList.add(...activeClasses);
+            btn.classList.remove(...inactiveClasses);
+          } else {
+            btn.classList.remove(...activeClasses);
+            btn.classList.add(...inactiveClasses);
+          }
+        });
+      };
+
+      styleGroup('.qr-type-btn', 'data-qrtype', appState.qr.dataType);
+      styleGroup('.qr-dot-btn', 'data-dottype', appState.qr.dotType);
+      styleGroup('.qr-csq-btn', 'data-csqtype', appState.qr.cornerSquareType);
+      styleGroup('.qr-cdot-btn', 'data-cdottype', appState.qr.cornerDotType);
+      styleGroup('.qr-frame-btn', 'data-framestyle', appState.qr.frameStyle);
+    }
+
+    /**************************************************************
+     * CENTER LOGO GENERATOR & UPLOAD HANDLER
+     **************************************************************/
+    function handleCustomLogoUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        appState.qr.logoDataUrl = e.target.result;
+        document.getElementById('qr-ecc').value = 'H'; // Boost ECC automatically for logo safety
+        triggerQrUpdate();
+        showToast('Custom center logo applied!', 'success');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearQrLogo() {
+      appState.qr.logoDataUrl = null;
+      document.getElementById('qr-logo-upload').value = '';
+      triggerQrUpdate();
+    }
+
+    function selectPresetLogo(name) {
+      if (name === 'none') {
+        clearQrLogo();
+        return;
+      }
+
+      // Dynamically draw crisp vector badge onto an offscreen canvas to create a clean DataURL
+      const c = document.createElement('canvas');
+      c.width = 160;
+      c.height = 160;
+      const ctx = c.getContext('2d');
+
+      const badgeConfig = {
+        globe:     { bg: '#2563eb', glyph: '\uf0ac', family: '"Font Awesome 6 Free"', weight: 900 },
+        wifi:      { bg: '#4f46e5', glyph: '\uf1eb', family: '"Font Awesome 6 Free"', weight: 900 },
+        vcard:     { bg: '#059669', glyph: '\uf2c2', family: '"Font Awesome 6 Free"', weight: 900 },
+        email:     { bg: '#e11d48', glyph: '\uf0e0', family: '"Font Awesome 6 Free"', weight: 900 },
+        whatsapp:  { bg: '#16a34a', glyph: '\uf232', family: '"Font Awesome 6 Brands"', weight: 400 },
+        phone:     { bg: '#0d9488', glyph: '\uf095', family: '"Font Awesome 6 Free"', weight: 900 },
+        location:  { bg: '#dc2626', glyph: '\uf3c5', family: '"Font Awesome 6 Free"', weight: 900 },
+        bitcoin:   { bg: '#f59e0b', glyph: '\uf379', family: '"Font Awesome 6 Brands"', weight: 400 },
+        youtube:   { bg: '#dc2626', glyph: '\uf167', family: '"Font Awesome 6 Brands"', weight: 400 },
+        instagram: { bg: '#db2777', glyph: '\uf16d', family: '"Font Awesome 6 Brands"', weight: 400 },
+        github:    { bg: '#1e293b', glyph: '\uf09b', family: '"Font Awesome 6 Brands"', weight: 400 },
+        cart:      { bg: '#7c3aed', glyph: '\uf290', family: '"Font Awesome 6 Free"', weight: 900 },
+        star:      { bg: '#eab308', glyph: '\uf005', family: '"Font Awesome 6 Free"', weight: 900 },
+        heart:     { bg: '#f43f5e', glyph: '\uf004', family: '"Font Awesome 6 Free"', weight: 900 },
+        check:     { bg: '#0284c7', glyph: '\uf058', family: '"Font Awesome 6 Free"', weight: 900 }
+      };
+
+      const cfg = badgeConfig[name];
+      if (!cfg) return;
+
+      // White outer border + Colored rounded badge
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, 4, 4, 152, 152, 38);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.bg;
+      roundRect(ctx, 14, 14, 132, 132, 30);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${cfg.weight} 74px ${cfg.family}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cfg.glyph, 80, 82);
+
+      appState.qr.logoDataUrl = c.toDataURL('image/png');
+      document.getElementById('qr-ecc').value = 'H';
+      triggerQrUpdate();
+    }
+
+    /**************************************************************
+     * 1D BARCODE GENERATOR ENGINE (ALL 20 FORMATS)
+     **************************************************************/
+    function onBarcodeFormatChange() {
+      const format = document.getElementById('bc-format').value;
+      const spec = BARCODE_SPECS[format];
+      if (spec) {
+        document.getElementById('bc-rule-title').textContent = spec.title + ':';
+        document.getElementById('bc-rule-desc').textContent = spec.desc;
+      }
+
+      // If current input doesn't match the new format's regex, automatically fill a valid sample so user sees an instant working barcode!
+      const currentVal = document.getElementById('bc-value').value.trim();
+      if (spec && !spec.regex.test(currentVal)) {
+        document.getElementById('bc-value').value = spec.sample;
+      }
+      renderBarcode();
+    }
+
+    function insertBarcodeSample() {
+      const format = document.getElementById('bc-format').value;
+      const spec = BARCODE_SPECS[format];
+      if (spec) {
+        document.getElementById('bc-value').value = spec.sample;
+        renderBarcode();
+        showToast(`Inserted valid ${format} sample`, 'info');
+      }
+    }
+
+    function randomizeBarcodeSample() {
+      const format = document.getElementById('bc-format').value;
+      const randomDigits = (len) => Array.from({ length: len }, () => Math.floor(Math.random() * 10)).join('');
+
+      let val = 'ITEM-' + randomDigits(4);
+      if (format === 'CODE128C' || format === 'ITF') val = randomDigits(10);
+      else if (format === 'EAN13') val = randomDigits(12);
+      else if (format === 'EAN8') val = randomDigits(7);
+      else if (format === 'EAN5') val = randomDigits(5);
+      else if (format === 'EAN2') val = randomDigits(2);
+      else if (format === 'UPC') val = randomDigits(11);
+      else if (format === 'UPCE') val = '0' + randomDigits(5);
+      else if (format === 'ITF14') val = randomDigits(13);
+      else if (format.startsWith('MSI')) val = randomDigits(7);
+      else if (format === 'pharmacode') val = String(Math.floor(Math.random() * 50000) + 10);
+      else if (format === 'codabar') val = 'A' + randomDigits(6) + 'B';
+      else if (format === 'CODE39') val = 'SKU-' + randomDigits(4);
+
+      document.getElementById('bc-value').value = val;
+      renderBarcode();
+    }
+
+    function renderBarcode() {
+      const format = document.getElementById('bc-format').value;
+      const value = document.getElementById('bc-value').value;
+      const lineColor = document.getElementById('bc-line-color').value;
+      const bgColor = document.getElementById('bc-bg-color').value;
+      const transparent = document.getElementById('bc-bg-transparent').checked;
+      const width = parseFloat(document.getElementById('bc-width').value) || 2;
+      const height = parseInt(document.getElementById('bc-height').value, 10) || 100;
+      const margin = parseInt(document.getElementById('bc-margin').value, 10) || 16;
+      const displayValue = document.getElementById('bc-display-value').checked;
+      const textOverride = document.getElementById('bc-text-override').value.trim();
+      const textPosition = document.getElementById('bc-text-pos').value;
+      const textAlign = document.getElementById('bc-text-align').value;
+      const font = document.getElementById('bc-font').value;
+      const fontSize = parseInt(document.getElementById('bc-fontsize').value, 10) || 18;
+
+      const errorBox = document.getElementById('bc-error-box');
+      const errorMsg = document.getElementById('bc-error-msg');
+      const canvas = document.getElementById('barcode-canvas');
+      const svg = document.getElementById('barcode-svg');
+
+      if (appState.activeTab === 'barcode') {
+        document.getElementById('live-payload-summary').textContent = `${format}: ${value}`;
+      }
+
+      try {
+        const opts = {
+          format,
+          lineColor,
+          background: transparent ? 'transparent' : bgColor,
+          width,
+          height,
+          margin,
+          displayValue,
+          text: textOverride || undefined,
+          textPosition,
+          textAlign,
+          font,
+          fontSize,
+          valid: function(isValid) {
+            if (!isValid) {
+              throw new Error(`Value "${value}" does not match ${format} format rules.`);
+            }
+          }
+        };
+
+        JsBarcode(canvas, value, opts);
+        JsBarcode(svg, value, opts);
+        errorBox.classList.add('hidden');
+      } catch (err) {
+        errorBox.classList.remove('hidden');
+        errorMsg.textContent = err.message || `Invalid characters or length for ${format}.`;
+      }
+    }
+
+    function resetBarcodeStyle() {
+      document.getElementById('bc-line-color').value = '#0f172a';
+      document.getElementById('bc-bg-color').value = '#ffffff';
+      document.getElementById('bc-bg-transparent').checked = false;
+      document.getElementById('bc-width').value = 2;
+      document.getElementById('bc-height').value = 100;
+      document.getElementById('bc-margin').value = 16;
+      document.getElementById('bc-display-value').checked = true;
+      document.getElementById('bc-text-override').value = '';
+      renderBarcode();
+    }
+
+    /**************************************************************
+     * EXPORT, CLIPBOARD & BATCH PRINT ENGINE
+     **************************************************************/
+    function getActiveCanvas() {
+      return appState.activeTab === 'barcode'
+        ? document.getElementById('barcode-canvas')
+        : document.getElementById('qr-composite-canvas');
+    }
+
+    async function exportCurrentCode(ext) {
+      const prefix = appState.activeTab === 'barcode' ? 'barcode' : 'qrcode';
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `${prefix}-${timestamp}.${ext}`;
+
+      if (ext === 'svg') {
+        if (appState.activeTab === 'barcode') {
+          const svgEl = document.getElementById('barcode-svg');
+          const serializer = new XMLSerializer();
+          const svgStr = serializer.serializeToString(svgEl);
+          const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+          triggerDownloadBlob(blob, filename);
+        } else {
+          try {
+            const rawBlob = await qrStylingInstance.getRawData('svg');
+            let svgText = await rawBlob.text();
+            if (appState.qr.cornerDotType === 'extra-rounded') {
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(svgText, 'image/svg+xml');
+              const dotClips = doc.querySelectorAll('clipPath[id*="corners-dot"] rect');
+              dotClips.forEach(rect => {
+                const w = parseFloat(rect.getAttribute('width') || '0');
+                const r = (w * 0.34).toFixed(2);
+                rect.setAttribute('rx', r);
+                rect.setAttribute('ry', r);
+              });
+              svgText = new XMLSerializer().serializeToString(doc);
+            }
+            const outBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+            triggerDownloadBlob(outBlob, filename);
+          } catch (e) {
+            qrStylingInstance.download({ name: `qrcode-${timestamp}`, extension: 'svg' });
+          }
+        }
+        showToast(`Downloaded ${filename}`, 'success');
+        return;
+      }
+
+      const sourceCanvas = getActiveCanvas();
+      // For JPEG, ensure non-transparent white background
+      const exportCanvas = document.createElement('canvas');
+      exportCanvas.width = sourceCanvas.width;
+      exportCanvas.height = sourceCanvas.height;
+      const ctx = exportCanvas.getContext('2d');
+
+      if (ext === 'jpeg') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      }
+      ctx.drawImage(sourceCanvas, 0, 0);
+
+      const mime = ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+      exportCanvas.toBlob((blob) => {
+        if (blob) {
+          triggerDownloadBlob(blob, filename);
+          showToast(`Exported ${filename}`, 'success');
+        }
+      }, mime, 0.95);
+    }
+
+    function triggerDownloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function copyCodeImageToClipboard() {
+      const canvas = getActiveCanvas();
+      try {
+        canvas.toBlob(async (blob) => {
+          if (!blob) return;
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            showToast('Code image copied to clipboard!', 'success');
+          } else {
+            showToast('Clipboard Image API restricted in this frame; use PNG download.', 'info');
+          }
+        }, 'image/png');
+      } catch (e) {
+        showToast('Could not copy image directly; use PNG download.', 'info');
+      }
+    }
+
+    function copyCurrentPayload() {
+      const text = appState.activeTab === 'barcode'
+        ? document.getElementById('bc-value').value
+        : buildQrPayloadString();
+      copyTextHelper(text);
+      showToast('Payload text copied to clipboard!', 'success');
+    }
+
+    function openPrintModal() {
+      document.getElementById('print-modal').classList.remove('hidden');
+      updatePrintSheetPreview();
+    }
+
+    function closePrintModal() {
+      document.getElementById('print-modal').classList.add('hidden');
+    }
+
+    function updatePrintSheetPreview() {
+      const copies = Math.min(60, Math.max(1, parseInt(document.getElementById('print-copies').value, 10) || 12));
+      const cols = parseInt(document.getElementById('print-cols').value, 10) || 3;
+      const caption = document.getElementById('print-caption').value.trim();
+      const sourceCanvas = getActiveCanvas();
+      const dataUrl = sourceCanvas.toDataURL('image/png');
+
+      const grid = document.getElementById('print-grid');
+      grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+      grid.innerHTML = '';
+
+      for (let i = 0; i < copies; i++) {
+        const item = document.createElement('div');
+        item.className = 'border border-dashed border-slate-300 p-3 rounded-lg flex flex-col items-center justify-center text-center break-inside-avoid';
+        item.innerHTML = `
+          <img src="${dataUrl}" class="max-h-36 w-auto object-contain mx-auto" alt="Label ${i + 1}" />
+          ${caption ? `<div class="mt-1.5 text-xs font-semibold text-slate-800">${escapeHtml(caption)}</div>` : ''}
+        `;
+        grid.appendChild(item);
+      }
+    }
+
+    /**************************************************************
+     * MULTI-FORMAT SCANNER & READER ENGINE (CAMERA + PHOTO)
+     **************************************************************/
+    function switchScannerSource(src) {
+      appState.scanner.source = src;
+      const camPanel = document.getElementById('scanner-camera-panel');
+      const filePanel = document.getElementById('scanner-file-panel');
+      const btnCam = document.getElementById('scan-src-camera');
+      const btnFile = document.getElementById('scan-src-file');
+
+      if (src === 'camera') {
+        camPanel.classList.remove('hidden');
+        filePanel.classList.add('hidden');
+        btnCam.className = 'px-4 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm flex items-center gap-2 transition';
+        btnFile.className = 'px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2 transition';
+      } else {
+        if (appState.scanner.isScanning) stopCameraScanner();
+        camPanel.classList.add('hidden');
+        filePanel.classList.remove('hidden');
+        btnFile.className = 'px-4 py-2 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 text-brand-600 dark:text-brand-400 shadow-sm flex items-center gap-2 transition';
+        btnCam.className = 'px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-2 transition';
+      }
+    }
+
+    async function populateCameraDevices() {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        const select = document.getElementById('camera-select');
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">Auto (Prefer Back Camera)</option>';
+        if (devices && devices.length) {
+          devices.forEach((d, idx) => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.label || `Camera ${idx + 1}`;
+            select.appendChild(opt);
+          });
+          if (currentVal) select.value = currentVal;
+        }
+      } catch (e) {
+        // Camera permission not yet granted; user can click Start Camera
+      }
+    }
+
+    async function toggleCameraScanner() {
+      if (appState.scanner.isScanning) {
+        await stopCameraScanner();
+      } else {
+        await startCameraScanner();
+      }
+    }
+
+    async function startCameraScanner() {
+      const startBtn = document.getElementById('camera-start-btn');
+      const placeholder = document.getElementById('camera-idle-placeholder');
+      const laser = document.getElementById('camera-laser');
+      const selectedCameraId = document.getElementById('camera-select').value;
+
+      try {
+        if (!appState.scanner.html5QrCode) {
+          appState.scanner.html5QrCode = new Html5Qrcode('camera-reader');
+        }
+
+        placeholder.classList.add('hidden');
+        laser.classList.remove('hidden');
+        startBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span>Stop Camera</span>';
+        startBtn.className = 'px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2';
+
+        const cameraConfig = selectedCameraId
+          ? { deviceId: { exact: selectedCameraId } }
+          : { facingMode: 'environment' };
+
+        await appState.scanner.html5QrCode.start(
+          cameraConfig,
+          {
+            fps: 12,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.333334
+          },
+          (decodedText, decodedResult) => {
+            const formatName = decodedResult?.result?.format?.formatName || 'QR_CODE';
+            handleSuccessfulScan(decodedText, formatName);
+          },
+          () => {
+            // Frame scan error ignored during live stream
+          }
+        );
+
+        appState.scanner.isScanning = true;
+        const videoEl = document.querySelector('#camera-reader video');
+        if (videoEl) {
+          videoEl.style.transform = appState.scanner.isMirrored ? 'scaleX(-1)' : 'none';
+        }
+        populateCameraDevices();
+      } catch (err) {
+        placeholder.classList.remove('hidden');
+        laser.classList.add('hidden');
+        startBtn.innerHTML = '<i class="fa-solid fa-play"></i><span>Start Camera</span>';
+        startBtn.className = 'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2';
+        showToast('Camera access unavailable or denied. Try Photo Scanner!', 'error');
+      }
+    }
+
+    async function stopCameraScanner() {
+      const startBtn = document.getElementById('camera-start-btn');
+      const placeholder = document.getElementById('camera-idle-placeholder');
+      const laser = document.getElementById('camera-laser');
+
+      try {
+        if (appState.scanner.html5QrCode && appState.scanner.isScanning) {
+          await appState.scanner.html5QrCode.stop();
+        }
+      } catch (e) {}
+
+      appState.scanner.isScanning = false;
+      placeholder.classList.remove('hidden');
+      laser.classList.add('hidden');
+      startBtn.innerHTML = '<i class="fa-solid fa-play"></i><span>Start Camera</span>';
+      startBtn.className = 'px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-sm transition flex items-center gap-2';
+    }
+
+    async function onCameraDeviceChange() {
+      if (appState.scanner.isScanning) {
+        await stopCameraScanner();
+        await startCameraScanner();
+      }
+    }
+
+    function toggleMirrorCamera() {
+      appState.scanner.isMirrored = !appState.scanner.isMirrored;
+      const videoEl = document.querySelector('#camera-reader video');
+      if (videoEl) {
+        videoEl.style.transform = appState.scanner.isMirrored ? 'scaleX(-1)' : 'none';
+      }
+    }
+
+    // Drag & Drop + File Upload Scanning
+    function handleScanDragOver(e) {
+      e.preventDefault();
+      document.getElementById('scan-dropzone').classList.add('border-brand-500');
+    }
+
+    function handleScanDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('scan-dropzone').classList.remove('border-brand-500');
+    }
+
+    function handleScanFileDrop(e) {
+      e.preventDefault();
+      document.getElementById('scan-dropzone').classList.remove('border-brand-500');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) processUploadedScanFile(file);
+    }
+
+    function handleScanFileSelect(e) {
+      const file = e.target.files?.[0];
+      if (file) processUploadedScanFile(file);
+    }
+
+    /**
+     * One-Click Self-Test: Sends the currently generated QR or 1D Barcode
+     * straight into the Scanner & Reader tab and decodes it!
+     */
+    function scanCurrentlyGeneratedCode() {
+      const sourceCanvas = getActiveCanvas();
+      sourceCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], 'generated-code.png', { type: 'image/png' });
+        switchMainTab('scanner');
+        switchScannerSource('file');
+        processUploadedScanFile(file);
+      }, 'image/png');
+    }
+
+    /**
+     * Multi-Pass Image Decoder:
+     * Tests:
+     * 1. Native BarcodeDetector (if available)
+     * 2. jsQR on padded white-background canvas (fast & handles stylized QR codes)
+     * 3. Html5Qrcode.scanFileV2 on padded high-contrast image (handles all 1D Barcodes & QR)
+     */
+    async function processUploadedScanFile(file) {
+      const previewCard = document.getElementById('scan-image-preview-card');
+      const previewImg = document.getElementById('scan-uploaded-img');
+      const statusEl = document.getElementById('scan-file-status');
+
+      previewCard.classList.remove('hidden');
+      statusEl.textContent = 'Analyzing image (Multi-Pass Decoder)...';
+      statusEl.className = 'text-xs font-bold uppercase tracking-wider text-brand-500';
+
+      const imgUrl = URL.createObjectURL(file);
+      previewImg.src = imgUrl;
+
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          // Create a generous white-padded canvas (crucial for 1D barcodes & transparent codes)
+          const pad = 60;
+          const workCanvas = document.createElement('canvas');
+          workCanvas.width = img.width + pad * 2;
+          workCanvas.height = img.height + pad * 2;
+          const ctx = workCanvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, workCanvas.width, workCanvas.height);
+          ctx.drawImage(img, pad, pad);
+
+          // PASS 1: Try Native BarcodeDetector if supported by browser
+          if ('BarcodeDetector' in window) {
+            try {
+              const detector = new BarcodeDetector();
+              const barcodes = await detector.detect(workCanvas);
+              if (barcodes && barcodes.length > 0) {
+                const hit = barcodes[0];
+                statusEl.textContent = `Decoded (${hit.format.toUpperCase()})`;
+                statusEl.className = 'text-xs font-bold uppercase tracking-wider text-emerald-500';
+                handleSuccessfulScan(hit.rawValue, hit.format.toUpperCase());
+                return;
+              }
+            } catch (e) {}
+          }
+
+          // PASS 2: Try jsQR on normal & high-contrast image data
+          if (window.jsQR) {
+            const imgData = ctx.getImageData(0, 0, workCanvas.width, workCanvas.height);
+            const qrHit = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'attemptBoth' });
+            if (qrHit && qrHit.data) {
+              statusEl.textContent = 'Decoded (QR_CODE)';
+              statusEl.className = 'text-xs font-bold uppercase tracking-wider text-emerald-500';
+              handleSuccessfulScan(qrHit.data, 'QR_CODE');
+              return;
+            }
+          }
+
+          // PASS 3: Try Html5Qrcode scanFileV2 (decodes 1D Barcodes + QR codes)
+          const paddedBlob = await new Promise(res => workCanvas.toBlob(res, 'image/png'));
+          const paddedFile = new File([paddedBlob], 'padded-scan.png', { type: 'image/png' });
+
+          const fileScanner = new Html5Qrcode('file-scanner-mount');
+          try {
+            const res = await fileScanner.scanFileV2(paddedFile, false);
+            if (res && res.decodedText) {
+              const fmt = res.result?.format?.formatName || 'BARCODE / QR';
+              statusEl.textContent = `Decoded (${fmt})`;
+              statusEl.className = 'text-xs font-bold uppercase tracking-wider text-emerald-500';
+              handleSuccessfulScan(res.decodedText, fmt);
+              return;
+            }
+          } catch (e) {
+            // Try original unpadded file as final fallback
+            const resOrig = await fileScanner.scanFileV2(file, false);
+            if (resOrig && resOrig.decodedText) {
+              const fmt = resOrig.result?.format?.formatName || 'BARCODE / QR';
+              statusEl.textContent = `Decoded (${fmt})`;
+              statusEl.className = 'text-xs font-bold uppercase tracking-wider text-emerald-500';
+              handleSuccessfulScan(resOrig.decodedText, fmt);
+              return;
+            }
+          }
+
+          throw new Error('No code found');
+        } catch (err) {
+          statusEl.textContent = 'No readable QR or Barcode detected in image';
+          statusEl.className = 'text-xs font-bold uppercase tracking-wider text-rose-500';
+          showToast('Could not detect a valid QR or barcode in that image.', 'error');
+        }
+      };
+      img.src = imgUrl;
+    }
+
+    function handleSuccessfulScan(decodedText, formatName) {
+      appState.scanner.lastDecodedText = decodedText;
+      appState.scanner.lastDecodedFormat = formatName;
+
+      if (document.getElementById('scan-beep-toggle').checked) {
+        playScanBeep();
+      }
+
+      document.getElementById('scan-result-empty').classList.add('hidden');
+      document.getElementById('scan-result-content').classList.remove('hidden');
+
+      const badge = document.getElementById('scan-result-format-badge');
+      badge.textContent = formatName;
+      badge.classList.remove('hidden');
+
+      document.getElementById('scan-raw-textarea').value = decodedText;
+      document.getElementById('scan-result-time').textContent = new Date().toLocaleTimeString();
+
+      // Render Intelligent Structured Card
+      renderStructuredScanDetails(decodedText, formatName);
+
+      // Save scan to History automatically
+      addHistoryItem({
+        kind: 'scanned',
+        format: formatName,
+        payload: decodedText,
+        timestamp: new Date().toISOString()
+      });
+
+      showToast(`Scanned ${formatName} successfully!`, 'success');
+    }
+
+    function renderStructuredScanDetails(raw, format) {
+      const card = document.getElementById('scan-structured-card');
+      const openBtn = document.getElementById('scan-open-link-btn');
+      openBtn.classList.add('hidden');
+      openBtn.classList.remove('flex');
+
+      // 1. Check Wi-Fi Payload
+      if (/^WIFI:/i.test(raw)) {
+        const ssid = (raw.match(/S:([^;]+);/) || [])[1] || 'Unknown';
+        const pass = (raw.match(/P:([^;]*);/) || [])[1] || 'None';
+        const enc = (raw.match(/T:([^;]+);/) || [])[1] || 'WPA';
+        card.innerHTML = `
+          <div class="flex items-center gap-2 text-xs font-bold text-brand-600 dark:text-brand-400">
+            <i class="fa-solid fa-wifi"></i> <span>Wi-Fi Network Credentials</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+            <div><span class="text-slate-400">SSID:</span> <strong class="font-mono">${escapeHtml(ssid)}</strong></div>
+            <div><span class="text-slate-400">Security:</span> <strong>${escapeHtml(enc)}</strong></div>
+            <div class="col-span-2"><span class="text-slate-400">Password:</span> <strong class="font-mono">${escapeHtml(pass)}</strong></div>
+          </div>
+        `;
+        return;
+      }
+
+      // 2. Check vCard Contact
+      if (/BEGIN:VCARD/i.test(raw)) {
+        const fn = (raw.match(/FN:(.+)/i) || [])[1] || '';
+        const tel = (raw.match(/TEL[^:]*:(.+)/i) || [])[1] || '';
+        const email = (raw.match(/EMAIL[^:]*:(.+)/i) || [])[1] || '';
+        const org = (raw.match(/ORG:(.+)/i) || [])[1] || '';
+        card.innerHTML = `
+          <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+            <i class="fa-solid fa-address-card"></i> <span>vCard Contact Card</span>
+          </div>
+          <div class="space-y-1 text-xs pt-1">
+            ${fn ? `<div><span class="text-slate-400">Name:</span> <strong>${escapeHtml(fn)}</strong></div>` : ''}
+            ${org ? `<div><span class="text-slate-400">Org:</span> <strong>${escapeHtml(org)}</strong></div>` : ''}
+            ${tel ? `<div><span class="text-slate-400">Phone:</span> <strong class="font-mono">${escapeHtml(tel)}</strong></div>` : ''}
+            ${email ? `<div><span class="text-slate-400">Email:</span> <strong>${escapeHtml(email)}</strong></div>` : ''}
+          </div>
+        `;
+        return;
+      }
+
+      // 3. Check URL
+      if (/^https?:\/\//i.test(raw.trim())) {
+        card.innerHTML = `
+          <div class="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400">
+            <i class="fa-solid fa-globe"></i> <span>Website URL Detected</span>
+          </div>
+          <div class="text-xs truncate font-mono pt-1">${escapeHtml(raw.trim())}</div>
+        `;
+        openBtn.href = raw.trim();
+        openBtn.classList.remove('hidden');
+        openBtn.classList.add('flex');
+        return;
+      }
+
+      // Default Summary
+      card.innerHTML = `
+        <div class="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+          <i class="fa-solid fa-barcode"></i> <span>Format: ${escapeHtml(format)} (${raw.length} characters)</span>
+        </div>
+      `;
+    }
+
+    function copyScannedText() {
+      copyTextHelper(appState.scanner.lastDecodedText);
+      showToast('Scanned text copied!', 'success');
+    }
+
+    function loadScannedIntoGenerator() {
+      const txt = appState.scanner.lastDecodedText;
+      const fmt = (appState.scanner.lastDecodedFormat || '').toUpperCase();
+      if (!txt) return;
+
+      // Check if 1D barcode format
+      if (fmt && !fmt.includes('QR')) {
+        switchMainTab('barcode');
+        document.getElementById('bc-format').value = 'CODE128';
+        document.getElementById('bc-value').value = txt;
+        renderBarcode();
+        showToast('Loaded scanned barcode into Barcode Studio!', 'success');
+      } else {
+        switchMainTab('qr');
+        if (/^https?:\/\//i.test(txt)) {
+          setQrDataType('url');
+          document.getElementById('qr-url-input').value = txt;
+        } else {
+          setQrDataType('text');
+          document.getElementById('qr-text-input').value = txt;
+        }
+        triggerQrUpdate();
+        showToast('Loaded scanned payload into QR Studio!', 'success');
+      }
+    }
+
+    function playScanBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1046.5, ctx.currentTime); // C6 note
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } catch (e) {}
+    }
+
+    /**************************************************************
+     * PERSISTENT LOCAL HISTORY ENGINE
+     **************************************************************/
+    function loadHistoryFromStorage() {
+      try {
+        const raw = localStorage.getItem('qr_barcode_studio_history_v1');
+        if (raw) appState.history = JSON.parse(raw);
+      } catch (e) {
+        appState.history = [];
+      }
+      updateHistoryBadge();
+    }
+
+    function saveHistoryToStorage() {
+      try {
+        localStorage.setItem('qr_barcode_studio_history_v1', JSON.stringify(appState.history.slice(0, 50)));
+      } catch (e) {}
+      updateHistoryBadge();
+    }
+
+    function updateHistoryBadge() {
+      document.getElementById('history-count-badge').textContent = appState.history.length;
+    }
+
+    function saveCurrentToHistory() {
+      if (appState.activeTab === 'barcode') {
+        const fmt = document.getElementById('bc-format').value;
+        const val = document.getElementById('bc-value').value;
+        addHistoryItem({ kind: 'generated-barcode', format: fmt, payload: val, timestamp: new Date().toISOString() });
+      } else {
+        const payload = buildQrPayloadString();
+        addHistoryItem({ kind: 'generated-qr', format: `QR (${appState.qr.dataType.toUpperCase()})`, payload, timestamp: new Date().toISOString() });
+      }
+      showToast('Saved to local history!', 'success');
+    }
+
+    function addHistoryItem(item) {
+      appState.history.unshift({ id: Date.now() + Math.random(), ...item });
+      appState.history = appState.history.slice(0, 50);
+      saveHistoryToStorage();
+    }
+
+    function renderHistoryList() {
+      const grid = document.getElementById('history-grid');
+      const query = (document.getElementById('history-search').value || '').toLowerCase();
+      const filtered = appState.history.filter(h =>
+        h.payload.toLowerCase().includes(query) || h.format.toLowerCase().includes(query)
+      );
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400">
+            <i class="fa-solid fa-clock-rotate-left text-2xl mb-2"></i>
+            <p class="text-xs">No saved or scanned items match your filter.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((item, idx) => `
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 flex flex-col justify-between gap-3">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${item.kind === 'scanned' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-brand-500/15 text-brand-500'}">
+                ${escapeHtml(item.format)}
+              </span>
+              <span class="text-[11px] text-slate-400 font-mono">${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <p class="text-xs font-mono text-slate-700 dark:text-slate-200 line-clamp-2 break-all">${escapeHtml(item.payload)}</p>
+          </div>
+          <div class="flex items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+            <button onclick="restoreHistoryItem(${idx})" class="flex-1 py-1.5 px-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition">
+              Load in Studio
+            </button>
+            <button onclick="copyHistoryPayload(${idx})" class="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-xs transition" title="Copy">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function restoreHistoryItem(index) {
+      const item = appState.history[index];
+      if (!item) return;
+      if (item.kind === 'generated-barcode') {
+        switchMainTab('barcode');
+        document.getElementById('bc-format').value = item.format;
+        document.getElementById('bc-value').value = item.payload;
+        renderBarcode();
+      } else {
+        switchMainTab('qr');
+        setQrDataType('text');
+        document.getElementById('qr-text-input').value = item.payload;
+        triggerQrUpdate();
+      }
+      showToast('Restored item into Studio!', 'info');
+    }
+
+    function copyHistoryPayload(index) {
+      const item = appState.history[index];
+      if (!item) return;
+      copyTextHelper(item.payload);
+      showToast('Copied payload to clipboard!', 'success');
+    }
+
+    function clearAllHistory() {
+      appState.history = [];
+      saveHistoryToStorage();
+      renderHistoryList();
+      showToast('Cleared local history', 'info');
+    }
+
+    /**************************************************************
+     * GENERAL UTILITIES (CLIPBOARD, ESCAPE, TOASTS)
+     **************************************************************/
+    function copyTextHelper(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+      } catch (e) {}
+      document.body.removeChild(ta);
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const colors = {
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        info: 'bg-slate-900 dark:bg-slate-800 text-white border border-slate-700'
+      };
+      const icons = {
+        success: 'fa-circle-check',
+        error: 'fa-triangle-exclamation',
+        info: 'fa-circle-info'
+      };
+
+      toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-xs font-semibold transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 250);
+      }, 2800);
+    }
+  </script>
+</body>
+</html>
